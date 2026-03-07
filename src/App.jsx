@@ -1,921 +1,904 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+
 
 // --- Custom CSS for Animations ---
 const customStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800&display=swap');
   
-  @keyframes bubble-rise {
-    0% { transform: translateY(0) scale(0.5); opacity: 0; }
-    20% { opacity: 1; transform: translateY(-10px) scale(1); }
-    100% { transform: translateY(-140px) scale(1.2); opacity: 0; }
-  }
-  
-  @keyframes foam-grow-large {
-    0% { height: 0; opacity: 0; }
-    10% { opacity: 1; }
-    100% { height: 45%; opacity: 1; }
-  }
-  
-  @keyframes foam-grow-medium {
-    0% { height: 0; opacity: 0; }
-    10% { opacity: 1; }
-    100% { height: 25%; opacity: 1; }
+  @keyframes drop-fall {
+    0% { transform: translate(-50%, -10px) scale(0.5); opacity: 0; }
+    20% { transform: translate(-50%, 0px) scale(1); opacity: 1; }
+    80% { transform: translate(-50%, 70px) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, 80px) scale(0.5); opacity: 0; }
   }
 
-  @keyframes pipette-drop {
-    0% { transform: translateY(0) scale(0.5); opacity: 0; }
-    20% { transform: translateY(3px) scale(1); opacity: 1; }
-    80% { transform: translateY(40px) scale(0.8); opacity: 1; }
-    100% { transform: translateY(50px) scale(0.5); opacity: 0; }
+
+  @keyframes disk-drop {
+    0% { transform: translate(-50%, -10px); opacity: 1; }
+    80% { transform: translate(-50%, 55px); opacity: 1; }
+    100% { transform: translate(-50%, 75px); opacity: 0; }
   }
 
-  .animate-pipette-drop {
-    animation: pipette-drop 0.6s ease-in infinite;
-  }
 
-  .bubble {
+  .falling-drop {
     position: absolute;
-    bottom: 4px;
-    border-radius: 50%;
-    background-color: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.9);
-    animation: bubble-rise infinite ease-in;
-  }
-  
-  .foam-layer {
-    position: absolute;
-    width: 100%;
-    background: rgba(255, 255, 255, 0.98);
+    top: 10px;
+    left: 50%;
+    transform: translate(-50%, -10px);
+    opacity: 0;
+    width: 10px;
+    height: 14px;
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    animation: drop-fall 0.45s linear forwards;
     z-index: 20;
-    border-top: 2px dotted rgba(180, 180, 180, 0.8);
-    border-radius: 8px 8px 0 0;
   }
   
-  .foam-large { animation: foam-grow-large 3s ease-out forwards; }
-  .foam-medium { animation: foam-grow-medium 3s ease-out forwards; }
-
-  .rtl { direction: rtl; }
-  .ltr { direction: ltr; }
+  .drop-base { background-color: #38bdf8; }
+  .drop-acid { background-color: #fbbf24; }
+  .drop-indicator { background-color: #e2e8f0; border: 1px solid #cbd5e1; }
+  .drop-water { background-color: #bae6fd; }
+  .drop-ethanol { background-color: #d8b4fe; }
+  .drop-glucose { background-color: #86efac; }
+  .drop-mixed { background-color: #93c5fd; }
   
-  body { font-family: 'Rubik', sans-serif; }
+  .pipette-tip {
+    position: relative;
+    width: 10px;
+    height: 55px;
+    background: linear-gradient(to bottom, #cbd5e1, #f8fafc);
+    border: 1px solid #94a3b8;
+    border-radius: 0 0 5px 5px;
+    z-index: 40;
+    transition: all 0.4s ease-in-out;
+  }
+
+
+  .pipette-liquid {
+    position: absolute;
+    bottom: 2px;
+    left: 1px;
+    right: 1px;
+    border-radius: 0 0 3px 3px;
+    transition: height 0.4s ease-in-out;
+  }
+
+
+  .tube-liquid {
+    width: 100%;
+    transition: height 0.8s ease-in-out, background-color 0.8s ease-in-out;
+  }
+
+
+  .water-bath {
+    background: linear-gradient(to bottom, rgba(14, 165, 233, 0.4), rgba(2, 132, 199, 0.7));
+    border: 4px solid #7dd3fc;
+    border-top: 2px dashed #38bdf8;
+    border-radius: 0 0 20px 20px;
+    backdrop-filter: blur(1px);
+  }
+
+
+  .straw {
+    position: absolute;
+    width: 10px;
+    height: 80px;
+    background: linear-gradient(to right, #f8fafc, #cbd5e1);
+    border: 1px solid #94a3b8;
+    border-radius: 2px 2px 0 0;
+    z-index: 40;
+    transition: all 0.3s ease-in-out;
+  }
+
+
+  .spoon {
+    position: absolute;
+    width: 75px;
+    height: 24px;
+    z-index: 40;
+    transition: all 0.3s ease-in-out;
+    transform-origin: right center;
+  }
 `;
 
-// --- Multiple Choice Component ---
+
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+
+// --- Sub-Component: Classification Table ---
+const ClassificationTable = ({ qNum, question, rows, options, correctAnswers, explanation }) => {
+  const [selections, setSelections] = useState({});
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+
+  const handleSelect = (rowIdx, optIdx) => {
+    if (!isSubmitted) setSelections({ ...selections, [rowIdx]: optIdx });
+  };
+
+
+  const isAllCorrect = rows.every((_, i) => selections[i] === correctAnswers[i]);
+
+
+  return (
+    <div className="border border-stone-200 rounded-lg p-4 md:p-6 mb-8 bg-white shadow-sm text-right">
+      <div className="font-bold text-base md:text-lg mb-5 text-stone-800 leading-snug text-right">
+        שאלה {qNum}: <span className="font-normal">{question}</span>
+      </div>
+      <div className="w-full mb-6 pb-2">
+        <table className="w-full border-collapse border border-stone-300 text-[10px] sm:text-xs md:text-sm table-fixed">
+          <thead>
+            <tr className="bg-stone-100">
+              <th className="p-1 md:p-3 border border-stone-300 w-1/3 text-right">מרכיב הניסוי</th>
+              {options.map((opt, i) => (
+                <th key={i} className="p-1 md:p-3 border border-stone-300 text-center break-words">{opt}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIdx) => (
+              <tr key={rowIdx}>
+                <td className="p-1 md:p-3 border border-stone-300 font-bold bg-stone-50 text-right text-stone-800 pr-2">{row}</td>
+                {options.map((_, optIdx) => (
+                  <td 
+                    key={optIdx} 
+                    className={`p-1 md:p-3 border border-stone-300 text-center cursor-pointer transition-colors ${
+                      isSubmitted 
+                        ? (optIdx === correctAnswers[rowIdx] ? 'bg-emerald-100' : (selections[rowIdx] === optIdx ? 'bg-rose-100' : ''))
+                        : (selections[rowIdx] === optIdx ? 'bg-sky-100' : 'hover:bg-stone-50')
+                    }`}
+                    onClick={() => handleSelect(rowIdx, optIdx)}
+                  >
+                    <div className={`w-5 h-5 md:w-6 md:h-6 rounded-full border-2 mx-auto flex items-center justify-center transition-all ${
+                      selections[rowIdx] === optIdx ? 'border-sky-600 bg-sky-600' : 'border-stone-400'
+                    } ${isSubmitted ? (optIdx === correctAnswers[rowIdx] ? 'border-emerald-600 bg-emerald-600' : selections[rowIdx] === optIdx ? 'border-rose-600 bg-rose-600' : '') : ''}`}>
+                      {selections[rowIdx] === optIdx && <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-white rounded-full"></div>}
+                    </div>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!isSubmitted ? (
+        <button 
+          onClick={() => Object.keys(selections).length === rows.length && setIsSubmitted(true)} 
+          disabled={Object.keys(selections).length < rows.length}
+          className="px-6 py-2 md:px-8 md:py-2.5 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 text-sm md:text-base"
+        >
+          בדוק תשובות
+        </button>
+      ) : (
+        <div className={`p-4 rounded-xl border-2 ${isAllCorrect ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+          <h4 className={`font-bold mb-2 text-sm md:text-base ${isAllCorrect ? 'text-emerald-800' : 'text-rose-800'}`}>
+            {isAllCorrect ? '✓ כל הכבוד! כל הסיווגים נכונים.' : '✗ חלק מהסיווגים אינם נכונים. ראו הסבר:'}
+          </h4>
+          <p className="text-stone-800 text-xs md:text-[15px]">{explanation}</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+// --- Multiple Choice Question Component ---
 const MultipleChoiceQnA = ({ qNum, question, options, correctAnswerIndex, explanation }) => {
   const [selectedOption, setSelectedOption] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
+
 
   const handleOptionSelect = (index) => {
     if (!isSubmitted) setSelectedOption(index);
   };
 
+
   const handleSubmit = () => {
     if (selectedOption !== null) setIsSubmitted(true);
   };
 
+
   const isCorrect = selectedOption === correctAnswerIndex;
 
+
   return (
-    <div className="border border-stone-200 rounded-xl p-4 md:p-5 mb-6 bg-white shadow-sm hover:shadow-md transition-shadow">
-      <div className="font-bold text-base md:text-lg mb-3 text-stone-800">
+    <div className="border border-stone-200 rounded-lg p-4 md:p-6 mb-8 bg-white shadow-sm hover:shadow-md transition-shadow text-right">
+      <div className="font-bold text-base md:text-lg mb-5 text-stone-800 leading-snug">
         שאלה {qNum}: <span className="font-normal whitespace-pre-line">{question}</span>
       </div>
-      
-      <div className="flex flex-col gap-2 mb-4">
+      <div className="flex flex-col gap-3 mb-5 text-right">
         {options.map((option, index) => {
-          let btnClass = "text-right p-3 rounded-lg border text-stone-700 transition-all duration-200 focus:outline-none ";
+          let btnClass = "text-right p-3 md:p-4 rounded-lg border-2 text-stone-700 transition-colors duration-200 focus:outline-none ";
           if (!isSubmitted) {
-             btnClass += selectedOption === index ? "bg-amber-100 border-amber-500 font-bold" : "bg-stone-50 hover:bg-stone-100 border-stone-300";
+              btnClass += selectedOption === index ? "bg-emerald-50 border-emerald-400 font-bold shadow-sm" : "bg-stone-50 hover:bg-stone-100 border-stone-200";
           } else {
             if (index === correctAnswerIndex) {
-              btnClass += "bg-lime-100 border-lime-600 font-bold text-lime-900"; 
+              btnClass += "bg-emerald-100 border-emerald-500 font-bold text-emerald-900";
             } else if (index === selectedOption) {
-              btnClass += "bg-rose-100 border-rose-500 font-bold text-rose-900"; 
+              btnClass += "bg-rose-50 border-rose-400 font-bold text-rose-800";
             } else {
-              btnClass += "bg-stone-50 border-stone-200 opacity-60";
+              btnClass += "bg-stone-50 border-stone-200 opacity-50";
             }
           }
-
           return (
             <button key={index} onClick={() => handleOptionSelect(index)} disabled={isSubmitted} className={btnClass}>
-              <div className="flex items-center gap-3">
-                <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                  isSubmitted 
-                    ? (index === correctAnswerIndex ? 'border-lime-600 bg-lime-600' : (index === selectedOption ? 'border-rose-500 bg-rose-500' : 'border-stone-300'))
-                    : (selectedOption === index ? 'border-amber-500 bg-amber-500' : 'border-stone-400')
+              <div className="flex items-center gap-3 md:gap-4">
+                <div className={`w-4 h-4 md:w-5 md:h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                  isSubmitted ? (index === correctAnswerIndex ? 'border-emerald-500 bg-emerald-500' : (index === selectedOption ? 'border-rose-500 bg-rose-500' : 'border-stone-300')) : (selectedOption === index ? 'border-emerald-500 bg-emerald-500' : 'border-stone-400')
                 }`}>
-                  {isSubmitted && index === correctAnswerIndex && <span className="text-white text-xs">✓</span>}
-                  {isSubmitted && index === selectedOption && index !== correctAnswerIndex && <span className="text-white text-xs">✗</span>}
+                  {isSubmitted && index === correctAnswerIndex && <span className="text-white text-[10px] md:text-xs">✓</span>}
+                  {isSubmitted && index === selectedOption && index !== correctAnswerIndex && <span className="text-white text-[10px] md:text-xs">✗</span>}
                 </div>
-                <span className="text-sm md:text-base">{option}</span>
+                <span className="text-sm md:text-[15px] leading-relaxed">{option}</span>
               </div>
             </button>
           );
         })}
       </div>
-
       {!isSubmitted && (
-        <button onClick={handleSubmit} disabled={selectedOption === null} className="px-6 py-2 bg-orange-600 text-white font-bold rounded-lg hover:bg-orange-700 transition-colors disabled:bg-stone-400 text-sm md:text-base">
+        <button onClick={handleSubmit} disabled={selectedOption === null} className="px-6 py-2 md:px-8 md:py-2.5 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors text-right text-sm md:text-base">
           בדוק תשובה
         </button>
       )}
-
       {isSubmitted && (
-        <div className={`mt-4 p-4 rounded-lg border-r-8 ${isCorrect ? 'bg-lime-50 border-lime-600' : 'bg-rose-50 border-rose-500'}`}>
-          <h4 className={`font-bold mb-1 text-base md:text-lg ${isCorrect ? 'text-lime-900' : 'text-rose-900'}`}>
-            {isCorrect ? 'כל הכבוד! תשובה נכונה.' : 'תשובה שגויה. הסבר:'}
+        <div className={`mt-4 p-4 md:p-5 rounded-xl border-2 ${isCorrect ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+          <h4 className={`font-bold mb-2 text-sm md:text-base ${isCorrect ? 'text-emerald-800' : 'text-rose-800'}`}>
+            {isCorrect ? '✓ כל הכבוד! תשובה נכונה.' : '✗ תשובה שגויה. הסבר:'}
           </h4>
-          <div className="text-stone-800 text-sm md:text-base whitespace-pre-line leading-relaxed">{explanation}</div>
+          <div className="text-stone-800 whitespace-pre-line leading-relaxed text-xs md:text-[15px]">
+            {explanation}
+          </div>
         </div>
       )}
     </div>
   );
 };
 
-// --- Pipette Component ---
-const Pipette = ({ activeLiquid }) => {
-  const isVisible = activeLiquid !== null;
-  const liquidColor = activeLiquid === 'soap' ? 'bg-yellow-300' : (activeLiquid === 'h2o2' || activeLiquid === 'water') ? 'bg-sky-300' : 'bg-blue-100';
-  
-  return (
-    <div className={`absolute -top-16 transition-all duration-500 z-40 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'}`}>
-      <div className="flex flex-col items-center">
-        <div className="w-5 h-6 bg-red-700 rounded-t-full rounded-b-sm z-10 shadow-sm border border-red-900"></div>
-        <div className="w-1.5 h-10 bg-white/70 border-x border-b border-stone-400 rounded-b-sm relative overflow-hidden shadow-sm -mt-0.5">
-          <div className={`absolute bottom-0 w-full transition-all duration-[1500ms] ease-linear ${isVisible ? 'h-0' : 'h-full'} ${liquidColor}`}></div>
-        </div>
-        {isVisible && <div className={`absolute w-1 h-2 rounded-full ${liquidColor} animate-pipette-drop`} style={{ bottom: '-8px' }}></div>}
-      </div>
-    </div>
-  );
-};
 
-// --- Part A Component ---
+// --- Part A: Initial Test ---
 const PartA = () => {
-  const [stage, setStage] = useState(0);
-  const [showFoam, setShowFoam] = useState(false);
-  const [showBubbles, setShowBubbles] = useState(false);
-  const [animatingPipette, setAnimatingPipette] = useState(null);
-  const [isBtnDisabled, setIsBtnDisabled] = useState(false);
+  const [stage, setStage] = useState(0); 
+  const [activeDrops, setActiveDrops] = useState({ a: [], b: [], c: [] });
+  const [isAnimating, setIsAnimating] = useState({ a: false, b: false, c: false });
+  const [isPink, setIsPink] = useState({ a: false, b: false, c: false });
+  const [tableData, setTableData] = useState({ a: { baseI: '-', acidI: '-', colorI: '', baseII: '-' }, b: { baseI: '-', acidI: '-', colorI: '', baseII: '-' }, c: { baseI: '-', acidI: '-', colorI: '', baseII: '-' } });
 
-  useEffect(() => {
-    let timerFoam, timerBubbles;
-    if (stage === 2) {
-      setShowBubbles(true);
-      timerFoam = setTimeout(() => setShowFoam(true), 1200);
-      timerBubbles = setTimeout(() => setShowBubbles(false), 6000);
-    } else {
-      setShowBubbles(false);
-      setShowFoam(false);
-    }
-    return () => { clearTimeout(timerFoam); clearTimeout(timerBubbles); };
-  }, [stage]);
 
-  const handleStage1 = () => {
-    setIsBtnDisabled(true); setAnimatingPipette('soap');
-    setTimeout(() => setStage(1), 600); 
-    setTimeout(() => { setAnimatingPipette(null); setIsBtnDisabled(false); }, 2000); 
-  };
+  const isAnyAnimating = isAnimating.a || isAnimating.b || isAnimating.c;
 
-  const handleStage2 = () => {
-    setIsBtnDisabled(true); setAnimatingPipette('h2o2');
-    setTimeout(() => setStage(2), 600);
-    setTimeout(() => { setAnimatingPipette(null); setIsBtnDisabled(false); }, 2000);
-  };
 
-  const generateBubbles = (intensity) => {
-    return Array.from({ length: intensity }).map((_, i) => (
-      <div key={i} className="bubble z-20" style={{ width: `${Math.random()*6+3}px`, height: `${Math.random()*6+3}px`, left: `${Math.random()*80+10}%`, animationDuration: `${Math.random()*1.5+1}s`, animationDelay: `${Math.random()*2}s` }} />
-    ));
-  };
-
-  const renderFoam = (sizeClass) => (
-    <div className={`foam-layer ${sizeClass} overflow-hidden`} style={{ bottom: '52%' }}>
-      {[...Array(50)].map((_, i) => (
-        <div key={i} className="absolute bg-white rounded-full border border-stone-200 shadow-sm" style={{ width: `${Math.random()*10+5}px`, height: `${Math.random()*10+5}px`, top: `${Math.random()*110 - 5}%`, left: `${Math.random()*120 - 10}%`, opacity: 0.98 }} />
-      ))}
-    </div>
-  );
-
-  return (
-    <div className="mb-8">
-      <h2 className="text-xl md:text-2xl font-bold mb-3 text-amber-900 border-b-4 border-amber-200 pb-1.5">חלק א' - הכרת שיטה לבדיקת תהליך של פירוק מי חמצן</h2>
-      <div className="bg-amber-50/70 p-4 rounded-xl mb-4 border-r-8 border-amber-400 shadow-sm text-sm md:text-base text-stone-800 leading-relaxed">
-        <strong>תיאור הניסוי:</strong> התלמידים הכינו שלוש מבחנות (קטלאז, רסק עדשים, מים) והוסיפו לכל אחת מי סבון ומי חמצן כדי לבדוק היווצרות בועות או קצף.
-      </div>
-
-      <div className="bg-white border-2 border-stone-100 p-4 rounded-xl mb-6 flex flex-col items-center shadow-md">
-        <h3 className="font-bold mb-4 text-stone-700 text-sm md:text-base">אנימציה חלק א'</h3>
-        
-        <div className="flex justify-center items-end gap-6 md:gap-12 mb-4 h-48 relative pt-20 mt-4 w-full">
-          {[
-            { name: 'קטלאז', color: 'bg-blue-100/80', foam: 'foam-large', count: 35 },
-            { name: 'עדשים', color: 'bg-blue-100/60', foam: 'foam-medium', count: 18, isLentil: true },
-            { name: 'מים', color: 'bg-blue-50' }
-          ].map((tube, idx) => (
-            <div key={idx} className="flex flex-col items-center relative">
-              <Pipette activeLiquid={animatingPipette} />
-              <div className="w-10 md:w-12 h-28 border-x-4 border-b-4 border-stone-400 relative overflow-hidden bg-white shadow-inner rounded-b-xl">
-                <div className={`absolute bottom-0 w-full transition-all duration-1000 border-t-2 border-stone-200 z-10 ${tube.isLentil && stage === 0 ? 'bg-amber-100' : tube.color}`} 
-                     style={{ height: stage === 0 ? '25%' : stage === 1 ? '48%' : '52%' }}>
-                  {tube.isLentil && stage === 0 && <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-6 h-3 bg-amber-700/30 rounded-full blur-[1px]"></div>}
-                </div>
-                {idx < 2 && showFoam && renderFoam(tube.foam)}
-                {idx < 2 && showBubbles && generateBubbles(tube.count)}
-              </div>
-              <span className="mt-1 text-xs md:text-sm font-bold text-stone-700">{tube.name}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap justify-center gap-1.5 md:gap-2 w-full max-w-md mt-2">
-          <button disabled={stage >= 1 || isBtnDisabled} onClick={handleStage1} className="flex-1 py-1.5 md:py-2 bg-stone-300 hover:bg-stone-400 text-stone-900 font-bold rounded-lg shadow text-xs md:text-sm disabled:opacity-50 border-b-2 border-stone-500">שלב 1: מי סבון</button>
-          <button disabled={stage !== 1 || isBtnDisabled} onClick={handleStage2} className="flex-1 py-1.5 md:py-2 bg-stone-600 hover:bg-stone-700 text-white font-bold rounded-lg shadow text-xs md:text-sm disabled:opacity-50 border-b-2 border-stone-800">שלב 2: מי חמצן</button>
-          <button onClick={() => {setStage(0); setShowFoam(false); setShowBubbles(false);}} className="px-3 py-1.5 md:py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold rounded-lg shadow text-xs md:text-sm border border-stone-300">איפוס</button>
-        </div>
-
-        <div className="mt-4 w-full">
-          <table className="w-full text-center border-collapse bg-white rounded-lg overflow-hidden shadow-sm text-xs md:text-sm">
-            <thead className="bg-amber-100 text-amber-900">
-              <tr className="border-b border-amber-200">
-                <th className="p-2 border-x border-amber-200">תכולת המבחנה</th>
-                <th className="p-2 border-x border-amber-200">נפח מי סבון (מ"ל)</th>
-                <th className="p-2 border-x border-amber-200">נפח מי חמצן (מ"ל)</th>
-              </tr>
-            </thead>
-            <tbody className="text-stone-700">
-              <tr className="border-b border-stone-100"><td className="p-2 border-x font-bold">קטלאז (1 מ"ל)</td><td className="p-2 border-x">{stage >= 1 ? '4' : '-'}</td><td className="p-2 border-x">{stage >= 2 ? '1' : '-'}</td></tr>
-              <tr className="border-b border-stone-100"><td className="p-2 border-x font-bold">רסק עדשים</td><td className="p-2 border-x">{stage >= 1 ? '4' : '-'}</td><td className="p-2 border-x">{stage >= 2 ? '1' : '-'}</td></tr>
-              <tr><td className="p-2 border-x font-bold">מים (1 מ"ל)</td><td className="p-2 border-x">{stage >= 1 ? '4' : '-'}</td><td className="p-2 border-x">{stage >= 2 ? '1' : '-'}</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <MultipleChoiceQnA 
-        qNum="1. א" 
-        question="מהי הכותרת המתאימה ביותר לטבלה המסכמת את מערך הניסוי שערכתם בחלק א'?" 
-        options={[
-          "השפעת ריכוז מי החמצן על קצב היווצרות הבועות במבחנות שונות.",
-          "בדיקת כמות המים המזוקקים הדרושה לפירוק האנזים קטלאז בסביבה סבונית.",
-          "השפעת חומרים שונים על פעילות הקטלאז (היווצרות בועות/קצף).",
-          "קצב יצירת קצף סבון בנוכחות תמיסות שונות של מלח ורסק עדשים."
-        ]}
-        correctAnswerIndex={2}
-        explanation={`הניסוי בודק השפעה של חומרים שונים (קטלאז, רסק עדשים ומים כבקרה) על התגובה של פירוק מי חמצן.`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="1. ב" 
-        question="על סמך התוצאות שהתקבלו באנימציה של הניסוי, מהו הדירוג הנכון של המבחנות לפי כמות הקצף שנוצר בהן (מהכמות הגדולה ביותר לכמות הקטנה ביותר או היעדר קצף)?" 
-        options={[
-          "מים > רסק עדשים > קטלאז",
-          "רסק עדשים > קטלאז > מים",
-          "קטלאז > מים > רסק עדשים",
-          "קטלאז > רסק עדשים > מים"
-        ]}
-        correctAnswerIndex={3}
-        explanation={`קטלאז > רסק עדשים > מים. במבחנת הקטלאז נוצרה כמות הקצף הגדולה ביותר. במבחנת רסק העדשים נוצר קצף, אך בכמות קטנה יותר בהשוואה לקטלאז. במבחנת המים לא נוצר קצף כלל (0).`} 
-      />
-      
-      <MultipleChoiceQnA 
-        qNum="2. א" 
-        question="מהו ההסבר הנכון לתוצאות שהתקבלו בכל אחת משלוש המבחנות?" 
-        options={[
-          "הסבון פירק את הקטלאז במבחנות והוביל ליצירת בועות.",
-          "קטלאז מעכב את פירוק מי החמצן במבחנה. במים המזוקקים אין קטלאז כלל, ולכן נוצרו שם בועות חמצן באופן טבעי.",
-          "קטלאז מזרז פירוק מי חמצן. במבחנת הקטלאז ובעדשים (שמכילות קטלאז) נוצרו בועות.",
-          "נבטי העדשים מפרקים את הקטלאז במבחנה ולכן ראינו פחות בועות."
-        ]}
-        correctAnswerIndex={2}
-        explanation={`קטלאז מזרז פירוק מי חמצן למים ולחמצן. החמצן שנוצר משתחרר בצורת בועות/קצף בנוכחות הסבון.`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="2. ב" 
-        question='מה היו עשויות להיות התוצאות במבחנה המסומנת "עדשים" אילו תמיסת מי החמצן שהוספתם הייתה בריכוז גבוה יותר, ומהו ההסבר לכך?' 
-        options={[
-          "קצב יצירת הקצף היה איטי הרבה יותר בגלל עיכוב תחרותי.",
-          "לא היה נצפה כל שינוי משמעותי בתוצאות בגלל נוכחות הסבון.",
-          "נוצרו פחות בועות חמצן בגלל דנטורציה של האנזים בריכוז גבוה.",
-          "קצב הפירוק היה מהיר יותר ונוצרו יותר בועות (עד לרוויה)."
-        ]}
-        correctAnswerIndex={3}
-        explanation={`עלייה בריכוז סובסטרט (מי חמצן), גורמת לעליה בסיכויי המפגשים בין אנזים לסובסטרט, וקצב הפירוק מהיר יותר.`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="3." 
-        question="נתון: תלמיד קיבל כלי ובו 10 מ''ל תמיסת מלח בריכוז 10%. התלמיד הוסיף לכלי 30 מ''ל מים מזוקקים. מהו ריכוז התמיסה שהתקבלה?" 
-        options={["2.5%", "5%", "7.5%", "10%"]}
-        correctAnswerIndex={0}
-        explanation={`התשובה: 2.5%. 
-פירוט החישוב לפי הנוסחה C₁ × V₁ = C₂ × V₂:
-C₁ = הריכוז ההתחלתי (10%)
-V₁ = הנפח ההתחלתי (10 מ"ל)
-C₂ = הריכוז הסופי (הנעלם X)
-V₂ = הנפח הסופי הכולל (10 מ"ל + 30 מ"ל מים = 40 מ"ל)
-הצבה בנוסחה: 10 × 10 = X × 40
-100 = 40X
-X = 2.5%
-
-או הסבר מילולי: ל-10 מ"ל תמיסת מלח בריכוז 10% הוסיפו 30 מ"ל מים, כלומר מהלו את התמיסה פי 4 (הנפח הסופי הוא 40 מ"ל), ולכן הריכוז ירד פי 4.`} 
-      />
-    </div>
-  );
-};
-
-// --- Part B Component ---
-const PartB = () => {
-  const [stageB, setStageB] = useState(0); 
-  const [animatingPipettesB, setAnimatingPipettesB] = useState(false);
-  const [isBtnDisabledB, setIsBtnDisabledB] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
-  const [round, setRound] = useState(0);
-  const [timers, setTimers] = useState({ a: 0, b: 0, c: 0, d: 0 });
-  const [diskStates, setDiskStates] = useState({ a: 15, b: 15, c: 15, d: 15 });
-  const [isRising, setIsRising] = useState({ a: false, b: false, c: false, d: false });
-  const [results, setResults] = useState({ a: [], b: [], c: [], d: [] });
-
-  const timesByRound = [{ a: 27, b: 33, c: 35, d: 45 }, { a: 25, b: 32, c: 40, d: 45 }, { a: 31, b: 30, c: 34, d: 45 }];
-
-  const handleStage1B = () => setStageB(1);
-  const handleStage2B = () => {
-    setIsBtnDisabledB(true); setAnimatingPipettesB(true);
-    setTimeout(() => setStageB(2), 600);
-    setTimeout(() => { setAnimatingPipettesB(false); setIsBtnDisabledB(false); }, 2000);
-  };
-  const handleStage3B = () => setStageB(3);
-  
-  const handleStage4B = () => {
-    if (stageB < 4) setStageB(4);
-    if (!isRunning && round < 3) setIsRunning(true);
-  };
-
-  useEffect(() => {
-    let intervals = [];
-    if (isRunning && round < 3 && stageB >= 4) {
-      setIsRising({ a: false, b: false, c: false, d: false });
-      setDiskStates({ a: 15, b: 15, c: 15, d: 15 });
-      setTimers({ a: 0, b: 0, c: 0, d: 0 });
-      const currentTimes = timesByRound[round];
-      let completed = 0;
-      
-      ['a', 'b', 'c', 'd'].forEach(tube => {
-        const duration = currentTimes[tube];
-        let tick = 0;
-        const interval = setInterval(() => {
-          tick++; 
-          setTimers(prev => ({...prev, [tube]: tick}));
-          
-          // שחרור הדיסקיות מיד בהתחלה
-          if (tick === 1) {
-             setDiskStates(prev => ({...prev, [tube]: 85}));
-          }
-
-          // הדיסקיות הגיעו לקרקעית - מתחילות לעלות
-          if (tick === 5) {
-             if (tube !== 'd') {
-               setIsRising(prev => ({...prev, [tube]: true}));
-               setDiskStates(prev => ({...prev, [tube]: 15}));
-             }
-          }
-
-          // הגעה לזמן היעד המדויק
-          if (tick >= duration || (tube === 'd' && tick >= 40)) {
-            clearInterval(interval); 
-            completed++;
-            if (tube !== 'd') {
-              setIsRising(prev => ({...prev, [tube]: false}));
-              setDiskStates(prev => ({...prev, [tube]: 15})); 
-            }
-            if (completed === 4) {
-              setTimeout(() => {
-                setResults(p => ({ 
-                  a: [...p.a, currentTimes.a], 
-                  b: [...p.b, currentTimes.b], 
-                  c: [...p.c, currentTimes.c], 
-                  d: [...p.d, 'לא צפה'] 
-                }));
-                setRound(r => r + 1); 
-                setIsRunning(false);
-                // החזרת הדיסקיות למעלה (כולל ד') לקראת ההטלה הבאה
-                setIsRising({ a: false, b: false, c: false, d: false });
-                setDiskStates({ a: 15, b: 15, c: 15, d: 15 });
-              }, 1200);
-            }
-          }
-        }, 100);
-        intervals.push(interval);
+  const triggerDrops = (config, onComplete) => {
+    let maxCount = 0;
+    Object.keys(config).forEach(k => { if(config[k]) maxCount = Math.max(maxCount, config[k].count); });
+    
+    let currentTick = 0;
+    const animatingState = { a: false, b: false, c: false };
+    Object.keys(config).forEach(k => { if (config[k] && config[k].count > 0) animatingState[k] = true; });
+    setIsAnimating(animatingState);
+    
+    const interval = setInterval(() => {
+      currentTick++;
+      Object.keys(config).forEach(tube => {
+         if (config[tube] && currentTick <= config[tube].count) {
+           setActiveDrops(prev => ({ ...prev, [tube]: [...prev[tube], { id: Date.now() + Math.random(), type: config[tube].type }] }));
+         }
       });
-    }
-    return () => intervals.forEach(clearInterval);
-  }, [isRunning, round, stageB]);
-
-  const resetB = () => {
-    setIsRunning(false); setRound(0); setStageB(0); setResults({ a: [], b: [], c: [], d: [] });
-    setTimers({ a: 0, b: 0, c: 0, d: 0 }); setDiskStates({ a: 15, b: 15, c: 15, d: 15 });
-    setIsRising({ a: false, b: false, c: false, d: false });
+      if (currentTick >= maxCount) {
+         clearInterval(interval);
+         setTimeout(() => { setIsAnimating({ a: false, b: false, c: false }); onComplete(); }, 600);
+      }
+    }, 500);
   };
 
-  const getAvg = (arr) => arr.includes('לא צפה') ? 'לא צפה' : Math.round(arr.reduce((a,b)=>a+b,0)/arr.length);
 
-  const getStageBText = () => {
-    const texts = [
-      "לחצו על '1: סימון' להתחלת בניית מערך הניסוי.",
-      "שלב 1: סימון המבחנות בקו המרוחק 3 ס\"מ משפת המבחנה.",
-      "שלב 2: הוספת מי חמצן (א-ג) ומים (ד) עד לקו בעזרת פיפטה.",
-      "שלב 3: טבילת דיסקיות נייר במיצויים של עדשים שהושרו בריכוזי מלח שונים (0%,2%,4%) והנחת הדיסקיות על פני הנוזל.",
-      "שלב 4: שחרור הדיסקיות שלוש פעמים וחישוב ממוצע משך זמן הציפה."
-    ];
-    return texts[stageB] || "";
+  const resetPartA = () => {
+    setStage(0); setActiveDrops({ a: [], b: [], c: [] });
+    setIsAnimating({ a: false, b: false, c: false }); setIsPink({ a: false, b: false, c: false });
+    setTableData({ a: { baseI: '-', acidI: '-', colorI: '', baseII: '-' }, b: { baseI: '-', acidI: '-', colorI: '', baseII: '-' }, c: { baseI: '-', acidI: '-', colorI: '', baseII: '-' } });
   };
 
-  const renderDiskBubbles = (tubeId) => {
-    if (tubeId === 'd' || !isRising[tubeId]) return null;
-    return (
-      <div className="absolute -bottom-3 w-full h-8 pointer-events-none">
-        {[...Array(12)].map((_, i) => (
-          <div key={i} className="bubble" style={{ 
-            width: `${3 + (i%3)}px`, height: `${3 + (i%3)}px`, 
-            left: `${-5 + (i*8)}%`, bottom: '0px', 
-            animationDuration: `${0.3 + (i%3)*0.1}s`, 
-            animationDelay: `${(i%2)*0.1}s` 
-          }}/>
-        ))}
-      </div>
-    );
-  };
 
   return (
-    <div className="mb-10">
-      <h2 className="text-xl md:text-2xl font-bold mb-4 text-amber-900 border-b-4 border-amber-200 pb-2">חלק ב' - בדיקת פעילות קטלאז מתאי נבטי עדשים</h2>
-      
-      <div className="bg-amber-50/70 p-4 md:p-5 rounded-xl mb-6 border-r-4 border-amber-400 shadow-sm">
-        <h3 className="font-bold text-amber-900 mb-2 text-base md:text-lg">מהלך הניסוי של התלמידים:</h3>
-        <p className="text-stone-700 leading-relaxed text-sm md:text-base">
-          התלמידים עבדו עם נבטי עדשים שהונבטו מראש במשך יומיים בשלוש תמיסות של המלח נתרן כלורי (NaCl) בריכוזים: 0%, 2%, ו-4%. התלמידים כתשו את הנבטים מכל ריכוז בנפרד (יחד עם תמיסת בופר) וסיננו אותם לקבלת מיצויים.
-        </p>
+    <div className="mb-16 text-right">
+      <div className="flex items-center gap-3 mb-6 border-b-2 border-emerald-200 pb-3">
+        <h2 className="text-xl md:text-2xl font-bold text-emerald-900">חלק א' - הכרת שיטת המדידה</h2>
       </div>
-
-      <div className="bg-amber-100 p-4 md:p-5 rounded-xl mb-6 border-r-4 border-amber-500 shadow-sm">
-        <h3 className="font-bold text-amber-900 mb-1 text-base md:text-lg">לידיעתכם 1:</h3>
-        <p className="text-stone-800 text-sm md:text-base">
-          בתמיסה מימית המלח נתרן כלורי (NaCl) מתפרק ליונים. יוני הנתרן חודרים לתאים ומשפיעים על המבנה המרחבי של החלבונים.
+      <div className="bg-emerald-50/70 p-4 md:p-6 rounded-2xl mb-6 border border-emerald-100 shadow-sm text-stone-800 leading-relaxed text-right">
+        <h3 className="font-bold text-emerald-900 mb-3 text-base md:text-lg">📋 שלב א: הכרת תכונות חומר הבוחן פנול-פתלאין</h3>
+        <p className="text-sm md:text-[16px] mb-2">
+          בשלב זה נכיר את שיטת המדידה. נכין מבחנות עם מים מזוקקים ואינדיקטור, נטפטף חומצה או בסיס, ולאחר מכן נבצע טיטרציה.
         </p>
+        <p className="text-emerald-800 font-bold text-sm md:text-base mt-2">הפעילו את שלבי האנימציה ועקבו אחר ההנחיות המופיעות בה:</p>
       </div>
-
-      <div className="bg-white border-2 border-stone-100 p-4 md:p-5 rounded-2xl mb-6 flex flex-col items-center shadow-md">
-        <h3 className="font-bold mb-4 text-stone-700 text-sm md:text-base text-center">אנימציית הניסוי: מדידת זמן הציפה</h3>
+      <div className="bg-white border-2 border-stone-100 p-3 md:p-5 rounded-2xl mb-8 shadow-sm text-right">
+        <div className="grid grid-cols-2 md:flex md:flex-wrap justify-center gap-2 mb-2 bg-stone-50 p-2 md:p-3 rounded-xl border border-stone-200">
+          <button onClick={() => {
+            setStage(1);
+            triggerDrops({a:{count:2,type:'indicator'},b:{count:2,type:'indicator'},c:{count:2,type:'indicator'}}, ()=> {
+              setTableData(p=>({...p,a:{...p.a,colorI:'חסר צבע'},b:{...p.b,colorI:'חסר צבע'},c:{...p.c,colorI:'חסר צבע'}}));
+            });
+          }} disabled={stage!==0||isAnyAnimating} className="w-full md:w-auto px-1 py-2 sm:px-3 md:px-5 md:py-2.5 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-lg shadow-sm transition-all text-[13px] sm:text-sm md:text-[15px] flex items-center justify-center text-center leading-tight">1. הוסף אינדיקטור</button>
+          <button onClick={async () => {
+            setStage(2);
+            triggerDrops({b:{count:1,type:'acid'}, c:{count:3,type:'acid'}}, async () => {
+              await wait(1000);
+              triggerDrops({a:{count:3,type:'base'}}, () => {
+                setIsPink(p=>({...p,a:true}));
+                setTableData(p=>({...p, a:{...p.a,baseI:'3',acidI:'-',colorI:'ורוד'}, b:{...p.b,baseI:'-',acidI:'1',colorI:'חסר צבע'}, c:{...p.c,baseI:'-',acidI:'3',colorI:'חסר צבע'} }));
+              });
+            });
+          }} disabled={stage!==1||isAnyAnimating} className="w-full md:w-auto px-1 py-2 sm:px-3 md:px-5 md:py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg shadow-sm transition-all text-[13px] sm:text-sm md:text-[15px] flex items-center justify-center text-center leading-tight">2. חומצה/בסיס</button>
+          <button onClick={() => {
+            setStage(3);
+            triggerDrops({b:{count:2,type:'base'},c:{count:4,type:'base'}}, ()=> {
+              setTableData(p=>({...p,b:{...p.b,baseII:'2'},c:{...p.c,baseII:'4'}}));
+            });
+            setTimeout(() => setIsPink(p=>({...p, b: true})), 1200); 
+            setTimeout(() => setIsPink(p=>({...p, c: true})), 2400);
+          }} disabled={stage!==2||isAnyAnimating} className="w-full md:w-auto px-1 py-2 sm:px-3 md:px-5 md:py-2.5 bg-pink-500 hover:bg-pink-600 text-white font-bold rounded-lg shadow-sm transition-all text-[13px] sm:text-sm md:text-[15px] flex items-center justify-center text-center leading-tight">3. טיטרציה (שלב II)</button>
+          <button onClick={resetPartA} className="w-full md:w-auto px-1 py-2 sm:px-3 md:px-5 md:py-2.5 bg-stone-200 hover:bg-stone-300 text-stone-700 font-bold rounded-lg shadow-sm transition-all text-[13px] sm:text-sm md:text-[15px] flex items-center justify-center text-center leading-tight gap-1.5"><span>↺</span> מחדש</button>
+        </div>
         
-        <div className="flex justify-center items-end gap-5 md:gap-10 mb-4 h-48 relative pt-24 mt-8 w-full">
-          {[{id:'a', label:'א', ex:'0%'}, {id:'b', label:'ב', ex:'2%'}, {id:'c', label:'ג', ex:'4%'}, {id:'d', label:'ד', ex:'0%', type:'water'}].map(t => (
-            <div key={t.id} className="flex flex-col items-center relative">
-              <Pipette activeLiquid={animatingPipettesB ? (t.type === 'water' ? 'water' : 'h2o2') : null} />
-              
-              {stageB >= 3 && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-[120%] text-[10px] md:text-xs font-extrabold text-amber-900 whitespace-nowrap z-50">
-                  מיצוי {t.ex}
+        <div className="relative w-full max-w-4xl mx-auto border border-stone-100 rounded-xl bg-slate-50 shadow-inner overflow-hidden flex justify-center items-end h-[220px] sm:h-[240px] md:h-[280px] pb-2 pt-14 md:pt-16">
+          <div className="absolute top-0 left-0 w-full bg-emerald-100/90 border-b border-emerald-200 p-2 z-40 text-center shadow-sm min-h-[44px] flex items-center justify-center transition-all duration-300">
+            <p className="text-xs md:text-sm text-emerald-900 px-2 leading-snug">
+              {stage === 0 && "לחצו על השלבים למעלה כדי להתחיל בניסוי (הוספת אינדיקטור)."}
+              {stage === 1 && <span><strong>הוספת אינדיקטור:</strong> הכנו שלוש מבחנות עם מים מזוקקים והוספנו 2 טיפות אינדיקטור פנול-פתלאין לכל אחת.</span>}
+              {stage === 2 && <span><strong>חומצה/בסיס:</strong> נטפטף חומצה (HCl) למבחנות ב' ו-ג', ולאחר מכן בסיס (NaOH) למבחנה א'.</span>}
+              {stage === 3 && <span><strong>טיטרציה:</strong> נטפטף בסיס (NaOH) למבחנות ב' ו-ג' ונמדוד כמה בסיס דרוש לסתירת החומצה.</span>}
+            </p>
+          </div>
+          <div className="flex justify-center items-end gap-8 md:gap-16 scale-75 sm:scale-90 md:scale-100 origin-bottom w-full">
+            {['a', 'b', 'c'].map(tube => (
+              <div key={tube} className="flex flex-col items-center relative w-16 text-right">
+                <div className={`absolute bottom-full mb-2 flex flex-col items-center justify-end transition-opacity duration-300 w-full min-h-[55px] ${isAnimating[tube] ? 'opacity-100' : 'opacity-0'}`}>
+                  <div className="pipette-tip relative">
+                    {activeDrops[tube].length > 0 && <div className={`pipette-liquid ${activeDrops[tube][0].type === 'indicator' ? 'bg-slate-200' : activeDrops[tube][0].type === 'acid' ? 'bg-amber-400' : 'bg-sky-400'}`} style={{ height: '60%' }}></div>}
+                  </div>
+                  {activeDrops[tube].map(drop => <div key={drop.id} className={`falling-drop drop-${drop.type}`}></div>)}
                 </div>
-              )}
-              
-              <div className="w-12 md:w-14 h-32 border-x-4 border-b-4 border-stone-400 relative bg-white overflow-hidden rounded-b-xl shadow-inner">
-                <div className={`absolute w-full h-0.5 bg-red-600/80 z-20 transition-opacity duration-500 ${stageB >= 1 ? 'opacity-100' : 'opacity-0'}`} style={{ top: '15%' }}></div>
-                <div className={`absolute bottom-0 w-full ${t.type==='water'?'bg-blue-50/60':'bg-blue-100/60'} border-t-2 border-stone-200 z-10 transition-all duration-1000`} style={{ height: stageB >= 2 ? '85%' : '0%' }}></div>
-                
-                <div className={`disk absolute w-8 md:w-10 h-1.5 bg-stone-700 rounded-full left-1/2 -translate-x-1/2 z-30 transition-all ${stageB >= 3 ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`} 
-                     style={{ 
-                       top: `${diskStates[t.id]}%`, 
-                       transition: `top ${isRising[t.id] ? ((timesByRound[round]?.[t.id] || 40) - 5) * 0.1 + 's' : '0.4s'} linear, opacity 0.5s` 
-                     }}>
-                   {renderDiskBubbles(t.id)}
+                <div className="w-14 h-36 border-x-[5px] border-b-[5px] border-stone-300 relative bg-stone-50 overflow-hidden shadow-inner mt-2" style={{ borderBottomLeftRadius: '1.75rem', borderBottomRightRadius: '1.75rem' }}>
+                  <div className="tube-liquid absolute bottom-0" style={{ height: '50%', backgroundColor: isPink[tube] ? '#f9a8d4' : 'rgba(226, 232, 240, 0.6)' }}></div>
                 </div>
+                <span className="mt-4 font-bold text-stone-700 bg-stone-100 px-3 py-1 rounded-md text-sm border border-stone-200 whitespace-nowrap">מבחנה {tube === 'a' ? 'א\'' : tube === 'b' ? 'ב\'' : 'ג\''}</span>
               </div>
-              <span className="mt-1 text-xs md:text-sm font-bold text-stone-800">מבחנה {t.label}</span>
-              <span className={`text-xs md:text-sm font-mono mt-0.5 text-stone-900 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-300 transition-opacity ${stageB >= 4 ? 'opacity-100' : 'opacity-0'}`}>
-                {t.id === 'd' && timers[t.id] >= 40 ? 'לא צפה' : `${timers[t.id]}s`}
-              </span>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-
-        <div className="bg-orange-50 px-4 py-2 rounded-lg mb-3 mt-4 text-center border border-amber-200 w-full max-w-2xl min-h-[2.5rem] flex items-center justify-center shadow-sm">
-          <p className="text-sm md:text-base text-amber-900 font-bold leading-tight">{getStageBText()}</p>
-        </div>
-
-        <div className="flex flex-wrap justify-center gap-1.5 md:gap-2 w-full max-w-xl py-1">
-          <button disabled={stageB >= 1 || isBtnDisabledB} onClick={handleStage1B} className="w-[31%] md:w-auto md:flex-1 py-2 md:py-1.5 bg-stone-300 hover:bg-stone-400 text-stone-900 font-bold rounded-lg shadow-sm text-[11px] md:text-sm leading-tight whitespace-normal md:whitespace-nowrap disabled:opacity-50 border-b-2 border-stone-500">1: סימון</button>
-          <button disabled={stageB !== 1 || isBtnDisabledB} onClick={handleStage2B} className="w-[31%] md:w-auto md:flex-1 py-2 md:py-1.5 bg-stone-300 hover:bg-stone-400 text-stone-900 font-bold rounded-lg shadow-sm text-[11px] md:text-sm leading-tight whitespace-normal md:whitespace-nowrap disabled:opacity-50 border-b-2 border-stone-500">2: מי חמצן ומים</button>
-          <button disabled={stageB !== 2 || isBtnDisabledB} onClick={handleStage3B} className="w-[31%] md:w-auto md:flex-1 py-2 md:py-1.5 bg-stone-500 hover:bg-stone-600 text-white font-bold rounded-lg shadow-sm text-[11px] md:text-sm leading-tight whitespace-normal md:whitespace-nowrap disabled:opacity-50 border-b-2 border-stone-700">3: דיסקיות</button>
-          <button disabled={stageB < 3 || isRunning || round >= 3} onClick={handleStage4B} className="w-[47%] md:w-auto md:flex-1 py-2 md:py-1.5 bg-stone-800 hover:bg-stone-900 text-white font-bold rounded-lg shadow-md text-[11px] md:text-sm leading-tight whitespace-normal md:whitespace-nowrap disabled:opacity-50 border-b-2 border-black">
-            {round >= 3 ? "סיום ניסוי" : stageB < 4 ? "4: שחרור" : `שחרור (${round+1}/3)`}
-          </button>
-          <button onClick={resetB} className="w-[47%] md:w-auto md:px-3 py-2 md:py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-600 font-bold rounded-lg shadow border border-stone-300 text-[11px] md:text-sm leading-tight">איפוס</button>
-        </div>
-
-        <div className="mt-4 w-full">
-          <h4 className="font-bold mb-2 text-center text-amber-900 text-sm md:text-base">טבלה 2: סיכום המדידות (משך זמן הציפה בשניות)</h4>
-          <table className="w-full text-center border-collapse bg-white rounded-lg overflow-hidden shadow-sm text-[11px] md:text-sm">
-            <thead className="bg-amber-100 text-amber-900">
-              <tr className="border-b border-amber-200">
-                <th className="p-1.5 md:p-2 border-x border-amber-200" rowSpan="2">מבחנה</th>
-                <th className="p-1.5 md:p-2 border-x border-amber-200" rowSpan="2">ריכוז תמיסת מלח בו הושרו העדשים (%)</th>
-                <th className="p-1.5 md:p-2 border-x border-amber-200" rowSpan="2">מי חמצן (-/+)</th>
-                <th className="p-1 md:p-2 border-x border-amber-200" colSpan="3">מדידות זמן הציפה (שניות)</th>
-                <th className="p-1.5 md:p-2 border-x border-amber-200 bg-amber-200" rowSpan="2">ממוצע (שניות)</th>
-              </tr>
-              <tr className="bg-amber-50">
-                <th className="p-1 border-x border-amber-200">מדידה I</th>
-                <th className="p-1 border-x border-amber-200">מדידה II</th>
-                <th className="p-1 border-x border-amber-200">מדידה III</th>
+        
+        <div className="w-full mt-2 md:mt-3 text-right">
+          <table className="w-full text-center border-collapse bg-white shadow-sm border border-stone-300 text-[10px] sm:text-xs md:text-sm">
+            <thead className="bg-stone-100 border-b-2 border-stone-300 text-stone-700 font-bold">
+              <tr><th className="p-1 md:p-2 border-x" rowSpan="2">המבחנה</th><th className="p-1 md:p-2 border-x" colSpan="3">שלב I</th><th className="p-1 md:p-2 border-x">שלב II</th></tr>
+              <tr className="bg-stone-50 text-[10px] sm:text-xs text-stone-600">
+                <th className="p-1 border-x break-words">נפח בסיס NaOH (טיפות)</th><th className="p-1 border-x break-words">נפח חומצה HCl (טיפות)</th><th className="p-1 border-x break-words">צבע התמיסה</th><th className="p-1 border-x break-words">טיפות בסיס לקבלת ורוד</th>
               </tr>
             </thead>
             <tbody>
-              {['a','b','c','d'].map((t, i) => (
-                <tr key={t} className="border-b border-stone-100">
-                  <td className="p-1.5 border-x font-bold uppercase">{['א','ב','ג','ד'][i]}</td>
-                  <td className="p-1.5 border-x">{[0,2,4,0][i]}</td>
-                  <td className="p-1.5 border-x font-bold">{i<3?'+':'-'}</td>
-                  <td className="p-1.5 border-x">{results[t][0] || '-'}</td>
-                  <td className="p-1.5 border-x">{results[t][1] || '-'}</td>
-                  <td className="p-1.5 border-x">{results[t][2] || '-'}</td>
-                  <td className="p-1.5 border-x bg-amber-50 font-bold text-amber-900">{results[t].length===3?getAvg(results[t]):'-'}</td>
+              {['a', 'b', 'c'].map((tube, idx) => (
+                <tr key={tube} className="border-b border-stone-200">
+                  <td className="p-1 md:p-2 border-x font-bold text-stone-800">{idx === 0 ? 'א\'' : idx === 1 ? 'ב\'' : 'ג\''}</td>
+                  <td className="p-1 md:p-2 border-x font-mono">{tableData[tube].baseI}</td><td className="p-1 md:p-2 border-x font-mono">{tableData[tube].acidI}</td>
+                  <td className={`p-1 md:p-2 border-x font-bold break-words ${tableData[tube].colorI === 'ורוד' ? 'text-pink-600' : 'text-stone-400'}`}>{tableData[tube].colorI}</td>
+                  <td className="p-1 md:p-2 border-x font-mono text-sky-800 font-bold text-sm md:text-lg">{tableData[tube].baseII}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
-      
-      <div className="bg-amber-100 p-4 md:p-5 rounded-xl mb-6 mt-6 border-r-4 border-amber-500 shadow-sm">
-        <h3 className="font-bold text-amber-900 mb-1 text-base md:text-lg">לידיעתכם 2:</h3>
-        <p className="text-stone-800 text-sm md:text-base">
-          דסקיות הנייר צפות בגלל שחרור של בועות גז.
-        </p>
-      </div>
-
-      <MultipleChoiceQnA 
-        qNum="4" 
-        question="בכל אחת מן המבחנות א-ד נערכו שלוש מדידות. מדוע חשוב לבצע חזרות בניסוי זה?" 
-        options={[
-          "ביצוע חזרות מאפשר להקטין את ההשפעה של טעות מקרית או של תוצאה חריגה.",
-          "מטרתן להוכיח שציפת הדסקית מושפעת אך ורק מריכוז המלח ולא מכל גורם אחר.",
-          "הן מגדילות את כמות מי החמצן המפורקת באופן מצטבר לאורך כל הניסוי.",
-          "חזרות מונעות מהדסקית לספוג כמות עודפת של מים שעלולה להטות את הזמן."
-        ]}
-        correctAnswerIndex={0}
-        explanation={`ייתכן שבמדידה אחת נפלה טעות והיא אינה מייצגת / ביצוע חזרות מאפשר להקטין השפעה של תוצאה חריגה. הממוצע מייצג את התוצאות באופן מהימן.`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="5. א" 
-        question="מהי הכותרת המתאימה ביותר לטבלה 2?" 
-        options={[
-          "השפעת ריכוז מי החמצן במבחנה על קצב פעילות האנזים קטלאז בזרעי שעועית.",
-          "השפעת ריכוז תמיסת המלח (NaCl) שבה הונבטו העדשים על קצב פעילות קטלאז.",
-          "משך זמן ציפת הדסקית כפונקציה של כמות מי הסבון שהוספה לכל מבחנה בניסוי.",
-          "בדיקת כמות המים המזוקקים הנדרשת לפירוק האנזים קטלאז בנבטי עדשים שונים."
-        ]}
-        correctAnswerIndex={1}
-        explanation={`כותרת לטבלה צריכה לכלול שלושה מרכיבים: 1. התייחסות למשתנה הבלתי תלוי: ריכוז [תמיסת] מלח. 2. התייחסות למשתנה התלוי או לדרך המדידה משך ציפת דסקית / [קצב] פירוק מי חמצן / [קצב] פעילות קטלאז/אנזים. 3. התייחסות לאורגניזם: עדשים.`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="5. ב" 
-        question="מהו המשתנה הבלתי תלוי בניסוי שערכתם בחלק ב?" 
-        options={[
-          "משך הזמן שלקח לדסקיות הנייר לצוף בחזרה למעלה בכל אחת מן המדידות.",
-          "קצב פעילות האנזים קטלאז כפי שחושב על ידי התלמידים בתום שלב התצפית.",
-          "ריכוז תמיסת המלח (NaCl) שבה הונבטו נבטי העדשים לפני תחילת הניסוי.",
-          "נפח מי החמצן שהוסף לכל אחת מן המבחנות במהלך מערך הבדיקה עצמו."
-        ]}
-        correctAnswerIndex={2}
-        explanation={`ריכוז [תמיסת] המלח [שבה הונבטו העדשים].`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="6. א" 
-        question="מהו המשתנה התלוי בניסוי שערכתם בחלק ב?" 
-        options={[
-          "כמות המים המזוקקים שהוספה למבחנת הבקרה במטרה לשמור על נפח קבוע.",
-          "ריכוז תמיסת המלח ששימשה להנבטת זרעי העדשים לאורך שני ימי ההנבטה.",
-          "קצב פעילות האנזים קטלאז (או קצב פירוק מי חמצן) הנמדד באמצעות ציפה.",
-          "מספר נבטי העדשים שנכתשו עבור הכנת המיצוי לכל אחת מארבע המבחנות."
-        ]}
-        correctAnswerIndex={2}
-        explanation={`קצב / מידת , פעילות אנזים / פעילות קטלאז / פירוק מי חמצן. (קצב יצירת/פליטת חמצן).`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="6. ב" 
-        question="מדוע מדידת משך זמן הציפה היא דרך מתאימה למדידת המשתנה התלוי?" 
-        options={[
-          "הדסקית מתפרקת לאיטה במהלך הניסוי וצפה רק כשהיא הופכת קלה מספיק לשם כך.",
-          "האנזים מפרק מי חמצן לחמצן. ככל שהפעילות מהירה, נוצר יותר גז שמציף את הדסקית.",
-          "מים מזוקקים דוחפים את הדסקית למעלה בכוח רב יותר ככל שיש פחות מלח במבחנה.",
-          "הדסקית סופגת מלח והופכת לכבדה יותר ככל שיש יותר מלח בתמיסה שבה היא הוטבלה."
-        ]}
-        correctAnswerIndex={1}
-        explanation={`ככל שקצב פעילות האנזים / קטלאז, מהיר יותר/ קצב פירוק מי חמצן גבוה יותר, משתחרר יותר גז/חמצן, והדסקית תצוף מהר יותר / הזמן עד לציפת הדסקית קצר יותר.`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="7." 
-        question="על סמך המידע על השפעת המלח נתרן כלורי על חלבונים (לידיעתכם 1), מהו ההסבר לתוצאות הניסוי?" 
-        options={[
-          "במבחנה ד' (0% מלח ומים) הדסקית לא צפה כלל מכיוון שהמלח הוא הגורם המרכזי שמזרז את התגובה הכימית של פירוק מי החמצן.",
-          "יוני הנתרן משמשים כסובסטרט מתחרה למי החמצן, ולכן בריכוז 4% פעילות האנזים התעכבה משמעותית בגלל התחרות על האתר הפעיל.",
-          "המלח גורם לעדשים לספוג הרבה פחות מים, ולכן הדסקית הייתה כבדה יותר במלח בריכוז 4% ולקח לה יותר זמן לצוף למעלה.",
-          "ככל שריכוז המלח גבוה יותר, יוני נתרן חודרים לתאים וגורמים לדנטורציה של הקטלאז. הפעילות יורדת והדסקית צפה לאט יותר."
-        ]}
-        correctAnswerIndex={3}
-        explanation={`ככל שריכוז המלח בתמיסות ההנבטה גבוה יותר, כך יותר יוני נתרן חודרים לתאים וגורמים לפגיעה / לשינוי במבנה המרחבי / לדנטורציה, בחלבונים/אנזימים. לכן יש ירידה בפעילות קטלאז / בפירוק מי חמצן, נוצרות פחות בועות גז והדסקית צפה לאט יותר. במבחנת הבדיקה ד' אין מי חמצן, לכן לא נוצרות בועות והדסקית לא צפה.`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="8. א" 
-        question="הטיפול שנבדק במבחנה ד הוא טיפול בקרה. מהי החשיבות של טיפול הבקרה בניסוי זה?" 
-        options={[
-          "להוכיח שהציפה של הדסקית מושפעת גם מהימצאות מי חמצן בתמיסה.",
-          "להוכיח שהציפה של הדסקית מושפעת גם מהימצאות האנזים קטלאז בתוך תמיסת הבדיקה.",
-          "להוכיח שמשך זמן הציפה של הדסקית יכול להיות יותר מ-120 שניות תחת תנאי הניסוי.",
-          "להוכיח שמשך זמן הציפה של הדסקית מושפע מכמות המיצוי המדויקת שנמצאת על הדסקית."
-        ]}
-        correctAnswerIndex={0}
-        explanation={`להוכיח שהציפה של הדסקית מושפעת גם מהימצאות מי חמצן בתמיסה.
-למורה: במבחנה ד נבדקה ציפת דסקית שהוטבלה במיצוי מנבטים שנבטו ללא מלח, והדסקית הוטבלה במים. חשיבות טיפול בקרה הוא שלילת הסבר חלופי. ההסבר החלופי שבקרה זו מאפשרת לשלול הוא: ריכוז המלח שמומס במיצוי משפיע באופן פיזיקלי (בגלל הבדל בצפיפות התמיסה) על קצב ציפת הדסקיות, ואינו מושפע ממידת פעילות קטלאז שבמיצוי הנבטים על מי חמצן.
-ניסוי זה עלול להיות מסובך לתלמידים ולכן בחרנו בניסוח פשוט, במשפט חיובי, המתייחס להיעדר מי חמצן במבחנת הבקרה.`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="8. ב" 
-        question="בניסוי שערכתם בחלק ב יש טיפול בקרה נוסף. מהו טיפול הבקרה הנוסף? מדוע חשוב לכלול גם אותו בניסוי זה?" 
-        options={[
-          "מבחנה ג' (4% מלח). היא מהווה בקרה משום שהיא מציגה את מצב העקה הקיצוני ביותר שיש להשוות אליו.",
-          "מבחנה ב' (2% מלח). היא משמשת כמצב ביניים המעיד על כך שהשינוי בקצב הפעילות הוא שינוי הדרגתי.",
-          "אין טיפול בקרה נוסף. מבחנה ד' היא הבקרה היחידה שמוכיחה את קיום התגובה בעזרת מים מזוקקים טהורים.",
-          "מבחנה א' (0% מלח). בקרה זו נועדה לשלול הסבר חלופי ולוודא שההבדל בפעילות נובע רק מריכוז המלח."
-        ]}
-        correctAnswerIndex={3}
-        explanation={`מבחנת בדיקה א [היא טיפול בקרה] לוודא [שריכוז] המלח הוא הגורם המשפיע על פעילות האנזים / מהירות ציפת הדסקיות.`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="9. א" 
-        question="אילו גורמים נשמרו קבועים בניסוי שערכתם?" 
-        options={[
-          "ריכוז המלח בתמיסת ההשריה והנפח המדויק של המים המזוקקים במבחנות.",
-          "סוג הזרעים (עדשים), טמפרטורת החדר, ריכוז האנזים ונפח מי החמצן.",
-          "קצב יצירת בועות החמצן, צבע הזרעים ואופן הכנת המיצוי בכל מבחנה.",
-          "זמן ציפת הדסקית, ריכוז האנזים קטלאז ועוצמת האור בחדר המעבדה."
-        ]}
-        correctAnswerIndex={1}
-        explanation={`סוג הזרעים/נבטים, טמפרטורה [של מי חמצן/התמיסה במבחנת הבדיקה], משך זמן ההנבטה, דרגת pH [של תמיסת הנבטה / תמיסת מי חמצן], גודל הדסקית / נפח המיצוי שנספג על הדסקית, ריכוז מי חמצן, נפח הנוזל / גודל המבחנה.`} 
-      />
-
-      <MultipleChoiceQnA 
-        qNum="9. ב" 
-        question="הסבירו מדוע היה חשוב שטמפרטורת החדר תישאר קבועה בניסוי שערכתם." 
-        options={[
-          "נפח הנוזל במבחנה נוטה להשתנות בעקבות טמפרטורה ולכן יש לקבע אותה בניסוי.",
-          "כדי שהמים לא ירתחו ויגרמו לנזק מבני בלתי הפיך לסיבי דסקית הנייר במהלך הניסוי.",
-          "הטמפרטורה משפיעה על קצב הפעילות האנזימטית ולכן רק המלח אמור להשפיע בניסוי.",
-          "טמפרטורה גבוהה מדי גורמת למלח להתאדות מהתמיסה וכך משנה את ריכוזו המדויק."
-        ]}
-        correctAnswerIndex={2}
-        explanation={`טמפרטורה משפיעה על קצב תהליכים אנזימטיים / קצב פירוק מי חמצן. בניסוי נבדקה ההשפעה של גורם אחר / משתנה בלתי תלוי אחר / ריכוזים שונים של תמיסות מלח, [ולכן כל שאר הגורמים צריכים להישמר קבועים].`} 
-      />
+      <MultipleChoiceQnA qNum="1" question="על פי התצפיות והטבלה, מהו צבע האינדיקטור פנול-פתלאין בסביבה בסיסית ובסביבה חומצית?" options={["בסביבה בסיסית הצבע ורוד ובסביבה חומצית הוא חסר צבע.","בסביבה בסיסית הצבע חסר צבע ובסביבה חומצית הוא ורוד.","בשתי הסביבות הצבע נשאר ורוד אך בעוצמות שונות לחלוטין.","בסביבה בסיסית הצבע כחול ובסביבה חומצית הוא צהוב בהיר."]} correctAnswerIndex={0} explanation="במבחנה א' (בסיס) הצבע הפך לוורוד. במבחנות ב' ו-ג' (חומצה) הצבע נותר שקוף." />
+      <MultipleChoiceQnA qNum="2" question="הסבירו מדוע במבחנה ג' נדרש מספר גדול יותר של טיפות בסיס (NaOH) מאשר במבחנה ב' בשלב II?" options={["מפני שבמבחנה ג' הוספו 3 טיפות חומצה, לעומת טיפה אחת בלבד במבחנה ב'.","מפני שבמבחנה ג' הוספו פחות מים ולכן ריכוז החומצה היה נמוך יותר.","מפני שהבסיס במבחנה ג' היה מרוכז יותר ולכן נדרשו יותר טיפות לסתירה.","מפני שהאינדיקטור פנול-פתלאין מתפרק מהר יותר בנוכחות חומצה HCl."]} correctAnswerIndex={0} explanation="הבסיס סותר את החומצה. ככל שיש יותר חומצה בתמיסה (3 טיפות לעומת 1), נדרשת כמות גדולה יותר של בסיס כדי לנטרול אותה." />
     </div>
   );
 };
 
-// --- Part C Component ---
-const PartC = () => {
+
+// --- Part B Component ---
+const PartB = () => {
+  const [isSeqAnimating, setIsSeqAnimating] = useState(false);
+  const [prepStage, setPrepStage] = useState(0);
+  const [prepTimer, setPrepTimer] = useState(0);
+  const [tubesY, setTubesY] = useState(0); 
+  const [tubesData, setTubesData] = useState([{id:1,water:0,eth:0,gluc:0,disks:0,stopper:false},{id:2,water:0,eth:0,gluc:0,disks:0,stopper:false},{id:3,water:0,eth:0,gluc:0,disks:0,stopper:false},{id:4,water:0,eth:0,gluc:0,disks:0,stopper:false}]);
+  const [pipetteState, setPipetteState] = useState({ tubeId: null, y: -60, type: 'water', liquidHeight: '0%', dropping: false });
+  const [spoonState, setSpoonState] = useState({ tubeId: null, rotated: false, dropping: false });
+  const [prepTable, setPrepTable] = useState([{id:1,water:'-',eth:'-',disks:'-',gluc:'-',time:'-'},{id:2,water:'-',eth:'-',disks:'-',gluc:'-',time:'-'},{id:3,water:'-',eth:'-',disks:'-',gluc:'-',time:'-'},{id:4,water:'-',eth:'-',disks:'-',gluc:'-',time:'-'}]);
+  const [showWaste, setShowWaste] = useState(false);
+  const [wasteHeight, setWasteHeight] = useState('5%');
+  const [agarHoles, setAgarHoles] = useState([]);
+  const [towelDisks, setTowelDisks] = useState([]);
+  const [strawPos, setStrawPos] = useState({ right: 80, bottom: 250, visible: false });
+
+
+  const [titrStage, setTitrStage] = useState(0);
+  const [titrLiquidHeight, setTitrLiquidHeight] = useState({ a: '0%', b: '0%', c: '0%', d: '0%' });
+  const [titrPink, setTitrPink] = useState({ a: false, b: false, c: false, d: false });
+  const [activeTitrDrops, setActiveTitrDrops] = useState({ a: [], b: [], c: [], d: [] });
+  const [titrTable, setTitrTable] = useState([{id:'A1',transfer:'-',ind:'-',base:'-'},{id:'B1',transfer:'-',ind:'-',base:'-'},{id:'C1',transfer:'-',ind:'-',base:'-'},{id:'D1',transfer:'-',ind:'-',base:'-'}]);
+  const [titrPipette, setTitrPipette] = useState({ visible: false, tubeId: null, dropping: false, type: 'mixed' });
+
+
+  const isAnyAnimating = isSeqAnimating;
+
+
+  const runPrepStep1 = async () => { 
+    setIsSeqAnimating(true); setPrepStage(1); 
+    setAgarHoles([]); setTowelDisks([]);
+    const holes = [{top:20,left:35},{top:30,left:55},{top:15,left:75},{top:35,left:95},{top:25,left:115}];
+    for(let i=0; i<5; i++) {
+      setStrawPos({ right: 80, bottom: 200, visible: true }); await wait(300);
+      setStrawPos({ right: 80, bottom: 80, visible: true }); 
+      setAgarHoles(prev => [...prev, holes[i]]); await wait(300);
+      setStrawPos({ right: 80, bottom: 200, visible: true }); await wait(250);
+      setStrawPos({ right: 320, bottom: 200, visible: true }); await wait(400);
+      setStrawPos({ right: 320, bottom: 80, visible: true }); 
+      setTowelDisks(prev => [...prev, i]); await wait(250);
+      setStrawPos({ right: 320, bottom: 200, visible: true }); await wait(250);
+    }
+    setStrawPos({ right: 80, bottom: 300, visible: false });
+    setIsSeqAnimating(false); 
+  };
+
+
+  const runPrepStep2 = async () => {
+    setIsSeqAnimating(true); setPrepStage(2);
+    const addLiq = async (idx, type, h, val, prop) => {
+      setPipetteState({ tubeId: idx+1, y: -40, type, liquidHeight: '0%', dropping: false }); await wait(400);
+      setPipetteState({ tubeId: idx+1, y: -10, type, liquidHeight: '0%', dropping: true }); await wait(400);
+      setTubesData(p => { const n = [...p]; n[idx][prop] = h; return n; }); await wait(600);
+      setPrepTable(p => { const n = [...p]; n[idx][prop] = val; return n; });
+      setPipetteState({ tubeId: idx+1, y: -40, type, liquidHeight: '0%', dropping: false }); await wait(300);
+    };
+    await addLiq(0, 'water', 25, '5', 'water'); await addLiq(1, 'water', 40, '9', 'water'); await addLiq(2, 'water', 40, '9', 'water'); await addLiq(3, 'ethanol', 25, '4.5', 'eth');
+    setPipetteState({ tubeId: null, y: -60, type: 'water', liquidHeight: '0%', dropping: false }); setIsSeqAnimating(false);
+  };
+
+
+  const runPrepStep3 = async () => {
+    setIsSeqAnimating(true); setPrepStage(3); setPrepTimer(0);
+    for(let i=0; i<4; i++) {
+       setSpoonState({ tubeId: i+1, rotated: false, dropping: false }); await wait(300);
+       setSpoonState({ tubeId: i+1, rotated: true, dropping: true }); await wait(400); 
+       setTubesData(p => { const n = [...p]; n[i].disks = 8; return n; }); await wait(200);
+       setSpoonState({ tubeId: null, rotated: false, dropping: false }); await wait(200);
+    }
+    setTubesData(p => p.map(t => ({...t, stopper: true}))); // ADD STOPPERS
+    setPrepTable(p => p.map(row => ({...row, disks: '8'}))); await wait(500);
+    setTubesY(30); await wait(1000);
+    for(let i=1; i<=6; i++) { setPrepTimer(i); if(i===6) setPrepTable(p => p.map(row => ({...row, time: '6 דק\''}))); await wait(600); }
+    setIsSeqAnimating(false);
+  };
+
+
+  const runPrepStep4 = async () => {
+    setIsSeqAnimating(true); setPrepStage(4); setTubesY(0); 
+    setTubesData(p => p.map(t => ({...t, stopper: false})));
+    await wait(1200);
+    const glucoseAct = async (id, h, tableIdx, tableVal) => {
+       setPipetteState({ tubeId: id, y: -40, type: 'glucose', liquidHeight: '80%', dropping: false }); await wait(400);
+       setPipetteState({ tubeId: id, y: -10, type: 'glucose', liquidHeight: '0%', dropping: true }); await wait(500); // IN TUBE
+       setTubesData(p => { const n = [...p]; n[tableIdx].gluc = h; return n; });
+       setPrepTable(p => { const n = [...p]; n[tableIdx].gluc = tableVal; return n; }); await wait(500);
+    };
+    await glucoseAct(4, 25, 3, 'הוספת 4.5 מ"ל'); 
+    await glucoseAct(1, 25, 0, 'הוספת 5 מ"ל');
+    
+    const transfer = async (from, to, val) => {
+       setPipetteState({ tubeId: from, y: 155, type: 'glucose', liquidHeight: '0%', dropping: false }); await wait(500); 
+       setPipetteState({ tubeId: from, y: 155, type: 'glucose', liquidHeight: '80%', dropping: false }); await wait(500);
+       setPipetteState({ tubeId: to, y: -10, type: 'glucose', liquidHeight: '0%', dropping: true }); await wait(600); // IN TUBE
+       setTubesData(p => { const n = [...p]; n[to-1].gluc = 10; return n; });
+       setPrepTable(p => { const n = [...p]; n[to-1].gluc = val; return n; });
+    };
+    await transfer(1, 2, 'העברת 1 מ"ל ממבחנה 1'); 
+    await transfer(2, 3, 'העברת 1 מ"ל ממבחנה 2');
+    
+    setShowWaste(true); setWasteHeight('5%'); await wait(500);
+    setPipetteState({ tubeId: 3, y: 155, type: 'glucose', liquidHeight: '0%', dropping: false }); await wait(500);
+    setPipetteState({ tubeId: 3, y: 155, type: 'glucose', liquidHeight: '80%', dropping: false }); await wait(500);
+    setPipetteState({ tubeId: 'waste', y: -10, type: 'glucose', liquidHeight: '0%', dropping: true }); 
+    setWasteHeight('30%'); await wait(600); // IN WASTE
+    setPipetteState({ tubeId: null, y: -60, type: 'glucose', liquidHeight: '0%', dropping: false }); 
+    await wait(500);
+    setShowWaste(false);
+    
+    setTubesData(p => p.map(t => ({...t, stopper: true}))); 
+    setTubesY(30); setPrepTimer(0); await wait(1000);
+    for(let i=1; i<=10; i++) { setPrepTimer(i); if(i===10) setPrepTable(p => p.map(row => ({...row, time: '16 דק\''}))); await wait(600); }
+    setIsSeqAnimating(false);
+  };
+  
+  const handleTitrStep1 = () => { setTitrStage(1); };
+  const handleTitrStep2 = async () => {
+    setIsSeqAnimating(true); setTitrStage(2);
+    for (let idx of ['a', 'b', 'c', 'd']) {
+        setTitrPipette({ visible: true, tubeId: idx, dropping: false, type: 'mixed' }); await wait(300);
+        setTitrPipette({ visible: true, tubeId: idx, dropping: true, type: 'mixed' });
+        setTitrLiquidHeight(p => ({...p, [idx]: '35%'})); await wait(600);
+        setTitrTable(p => {
+          const newP = [...p];
+          const i = idx === 'a' ? 0 : idx === 'b' ? 1 : idx === 'c' ? 2 : 3;
+          newP[i].transfer = `ממבחנה ${i + 1}`; return newP;
+        });
+        setTitrPipette({ visible: true, tubeId: idx, dropping: false, type: 'mixed' }); await wait(200);
+    }
+    setTitrPipette({ visible: false, tubeId: null, dropping: false, type: 'mixed' }); setIsSeqAnimating(false);
+  };
+  const handleTitrStep3 = async () => {
+    setIsSeqAnimating(true); setTitrStage(3);
+    for (let idx of ['a', 'b', 'c', 'd']) {
+        setTitrPipette({ visible: true, tubeId: idx, dropping: false, type: 'indicator' }); await wait(300);
+        setTitrPipette({ visible: true, tubeId: idx, dropping: true, type: 'indicator' }); await wait(600);
+        setTitrTable(p => {
+          const newP = [...p];
+          const i = idx === 'a' ? 0 : idx === 'b' ? 1 : idx === 'c' ? 2 : 3;
+          newP[i].ind = '2'; return newP;
+        });
+    }
+    setTitrPipette({ visible: false, tubeId: null, dropping: false, type: 'indicator' }); setIsSeqAnimating(false);
+  };
+  const handleTitrStep4 = () => {
+    setTitrStage(4); const targets = { a: 13, b: 8, c: 4, d: 3 };
+    ['a', 'b', 'c', 'd'].forEach(tube => {
+      let count = 0; const interval = setInterval(() => {
+        if (count < targets[tube]) {
+          count++; setActiveTitrDrops(prev => ({ ...prev, [tube]: [...prev[tube], count] }));
+          setTitrTable(p => { const n = [...p]; const i = tube === 'a' ? 0 : tube === 'b' ? 1 : tube === 'c' ? 2 : 3; n[i].base = count; return n; });
+          if (count === targets[tube]) { setTimeout(() => setTitrPink(prev => ({ ...prev, [tube]: true })), 300); }
+        } else clearInterval(interval);
+      }, 350);
+    });
+  };
+
+
+  const resetPartB = () => { 
+    setPrepStage(0); setPrepTimer(0); setTubesY(0); setShowWaste(false); setWasteHeight('5%'); setTitrStage(0);
+    setTubesData([{id:1,water:0,eth:0,gluc:0,disks:0,stopper:false},{id:2,water:0,eth:0,gluc:0,disks:0,stopper:false},{id:3,water:0,eth:0,gluc:0,disks:0,stopper:false},{id:4,water:0,eth:0,gluc:0,disks:0,stopper:false}]); 
+    setPrepTable([{id:1,water:'-',eth:'-',disks:'-',gluc:'-',time:'-'},{id:2,water:'-',eth:'-',disks:'-',gluc:'-',time:'-'},{id:3,water:'-',eth:'-',disks:'-',gluc:'-',time:'-'},{id:4,water:'-',eth:'-',disks:'-',gluc:'-',time:'-'}]); 
+    setTitrStage(0); setTitrPink({ a: false, b: false, c: false, d: false }); setActiveTitrDrops({ a: [], b: [], c: [], d: [] }); setAgarHoles([]); setTowelDisks([]);
+    setTitrTable([{id:'A1',transfer:'-',ind:'-',base:'-'},{id:'B1',transfer:'-',ind:'-',base:'-'},{id:'C1',transfer:'-',ind:'-',base:'-'},{id:'D1',transfer:'-',ind:'-',base:'-'}]); 
+  };
+
+
   return (
-    <div className="mb-12">
-      <h2 className="text-xl md:text-2xl font-bold mb-4 text-amber-900 border-b-4 border-amber-200 pb-2">חלק ג' - התאמות של צמח היבלית</h2>
-      
-      {/* פתיח חלק ג' */}
-      <div className="bg-amber-50/70 p-4 md:p-5 rounded-xl mb-6 border-r-8 border-amber-400 shadow-sm text-sm md:text-base text-stone-800 leading-relaxed">
-        <p className="mb-2">
-          בשטחים חקלאיים שמשקים אותם במי קולחין (מי שפכים שעברו טיהור) יש עלייה בריכוז המלחים בקרקע. גורם נוסף לעלייה בריכוז המלחים בקרקע הוא התאדות רבה של המים שבקרקע.<br/>
-          ריכוז גבוה של מלחים בקרקע הוא אחד הגורמים האביוטיים המשפיעים על התפתחות צמחים.
-        </p>
-        <p className="mb-4">
-          חוקרים מצאו זנים של צמחי יבלית שמותאמים לתנאי מליחות, כלומר הם יכולים להתפתח בקרקעות שיש בהן ריכוז גבוה של מלחים. הבנה של מנגנוני ההתאמה של צמחים לתנאי מליחות תסייע לפתח צמחים שיוכלו לגדול בתנאים אלה.
-        </p>
-        <p className="mb-2 font-bold underline decoration-amber-300 decoration-2 underline-offset-4">ניסוי 1:</p>
-        <p>
-          החוקרים גידלו צמחי יבלית בני אותו גיל משני זנים — זן א' וזן ב' — בתמיסות שבהן ריכוזים שונים של המלח NaCl.<br/>
-          לאחר שלושה שבועות הם הכינו מיצויים מן הצמחים משני הזנים, ומדדו את הריכוז של מי החמצן (H₂O₂) במיצויים.<br/>
-          מי החמצן הם תוצר לוואי בתהליך הנשימה התאית, והם רעילים לתאים.<br/>
-          תוצאות הניסוי מוצגות בטבלה 3 שלהלן.
-        </p>
+    <div className="mb-14 text-right">
+      <div className="flex items-center gap-3 mb-6 border-b-2 border-emerald-200 pb-3">
+        <h2 className="text-xl md:text-2xl font-bold text-emerald-900">חלק ב' - ניסוי: השפעת אתנול וגלוקוז על קצב תהליך הנשימה התאית בשמרים</h2>
       </div>
 
-      <div className="bg-white p-4 md:p-5 border border-stone-200 rounded-xl shadow-sm mb-6 max-w-2xl mx-auto">
-        <h4 className="font-bold text-center mb-3 text-amber-900 text-sm md:text-base">טבלה 3: ניסוי 1 - ריכוז מי חמצן במיצוי (יחידות יחסיות)</h4>
-        <table className="w-full text-center border-collapse text-sm md:text-base">
-          <thead>
-            <tr className="bg-amber-100 border-b-2 border-amber-200 text-amber-900">
-              <th className="p-2 border-l border-amber-200 w-1/3">ריכוז המלח (%)</th>
-              <th className="p-2 border-l border-amber-200 w-1/3">זן א'</th>
-              <th className="p-2 w-1/3">זן ב'</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              [0, 2.5, 2.5],
-              [0.3, 2.3, 2.5],
-              [0.5, 2.7, 2.5],
-              [0.7, 2.3, 3.5],
-              [1.0, 2.4, 4.7]
-            ].map((row, i) => (
-              <tr key={i} className="border-b hover:bg-stone-50">
-                <td className="p-2 border-l border-stone-200 font-bold">{row[0]}</td>
-                <td className="p-2 border-l border-stone-200">{row[1]}</td>
-                <td className="p-2">{row[2]}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      <div className="bg-amber-50/80 p-4 md:p-6 rounded-2xl mb-6 border border-amber-200 shadow-sm leading-relaxed text-stone-800 text-right">
+        <h3 className="font-bold text-amber-900 mb-1 text-sm md:text-base">לידיעתכם:</h3>
+        <p className="text-sm md:text-[15px]">אתנול הוא חומר הממס שומנים ופוגע במבנה המרחבי של חלבונים. פחמן דו-חמצני (CO2) הנוצר בנשימה תאית מגיב עם מים ויוצר חומצה.</p>
       </div>
 
-      <MultipleChoiceQnA 
-        qNum="10. א" 
-        question="איזה מסיח מתאר בצורה הטובה ביותר את התוצאות המוצגות בטבלה 3?" 
-        options={[
-          "בזן א' הריכוז נשאר נמוך וקבוע, בעוד שבזן ב' חלה עלייה חדה החל מ-0.7% מלח.",
-          "בשני הזנים גם יחד חלה עלייה זהה בריכוז מי החמצן ככל שריכוז המלח עלה.",
-          "בזן ב' הריכוז נשאר יציב, ובזן א' חלה עלייה דרמטית.",
-          "בריכוזי מלח גבוהים חלה ירידה בריכוז מי החמצן בשני הזנים."
-        ]}
-        correctAnswerIndex={0}
-        explanation={`בזן א' הריכוז נשאר סביב 2.3-2.7 יחידות יחסיות (נמוך וללא שינוי מגמתי), בעוד שבזן ב' הריכוז מזנק מ-2.5 ל-3.5 (בריכוז 0.7% מלח) ואף מגיע ל-4.7 (ב-1.0% מלח).`} 
-      />
 
-      <MultipleChoiceQnA 
-        qNum="10. ב" 
-        question="איזה סוג גרף מתאים ביותר להצגת נתוני טבלה 3?" 
-        options={[
-          "דיאגרמת עמודות, כי אלו קבוצות שונות.", 
-          "גרף רציף (קו/פיזור), כי ריכוז המלח הוא משתנה כמותי רציף.", 
-          "גרף עוגה, להצגת החלק היחסי של כל זן.", 
-          "אין אפשרות להציג נתונים אלו בגרף."
-        ]}
-        correctAnswerIndex={1}
-        explanation={`גרף רציף / פיזור. נימוק: המשתנה הבלתי תלוי (ריכוז מלח / NaCl), הוא משתנה רציף / כמותי.`} 
-      />
+      <div className="bg-emerald-50/70 p-4 md:p-6 rounded-2xl mb-8 border border-emerald-100 shadow-sm text-stone-800 leading-relaxed text-right">
+        <h3 className="font-bold text-emerald-900 mb-2 text-base md:text-lg">📋 שלב ב1: הכנת דסקיות שמרים מקובעים באגר, הכנת התמיסות והדגרה</h3>
+        <p className="text-sm md:text-[16px] mb-2">
+          נבדוק את השפעת האתנול והגלוקוז על קצב הנשימה של השמרים. בנשימה תאית נפלט פחמן דו-חמצני (CO2), שמתמוסס במים ויוצר חומצה.
+        </p>
+        <p className="text-emerald-800 font-bold text-right text-sm md:text-base mt-2">הפעילו את שלבי האנימציה ועקבו אחר תהליך ההכנה בטבלה:</p>
+      </div>
 
-      <div className="bg-white p-4 md:p-5 border-2 border-stone-100 rounded-2xl shadow-md mb-6 flex flex-col items-center justify-center">
-        <div className="text-right w-full mb-4 px-2">
-           <h4 className="font-bold text-stone-800 text-base md:text-lg mb-1">ניסוי 2:</h4>
-           <p className="text-stone-700 text-sm md:text-base">
-             החוקרים בדקו את קצב הפעילות של האנזים קטלאז בשני הזנים של צמחי היבלית שהם גידלו.<br/>
-             תוצאות הניסוי מתוארות בגרף שלהלן.
-           </p>
+
+      <div className="bg-white border-2 border-stone-100 p-3 md:p-5 rounded-2xl mb-8 shadow-sm relative overflow-hidden text-right">
+        <div className="grid grid-cols-2 md:flex md:flex-wrap justify-center gap-2 mb-2 relative z-20 bg-stone-50 p-2 md:p-3 rounded-xl border border-stone-200">
+          <button onClick={runPrepStep1} disabled={prepStage!==0||isSeqAnimating} className="w-full md:w-auto px-1 py-2 md:px-4 md:py-2.5 bg-amber-500 text-white font-bold rounded-lg shadow-sm text-[13px] sm:text-sm md:text-base flex items-center justify-center text-center leading-tight">1. הכנת דסקיות</button>
+          <button onClick={runPrepStep2} disabled={prepStage!==1||isSeqAnimating} className="w-full md:w-auto px-1 py-2 md:px-4 md:py-2.5 bg-sky-500 text-white font-bold rounded-lg shadow-sm text-[13px] sm:text-sm md:text-base flex items-center justify-center text-center leading-tight">2. מים ואתנול</button>
+          <button onClick={runPrepStep3} disabled={prepStage!==2||isSeqAnimating} className="w-full md:w-auto px-1 py-2 md:px-4 md:py-2.5 bg-orange-500 text-white font-bold rounded-lg shadow-sm text-[13px] sm:text-sm md:text-base flex items-center justify-center text-center leading-tight">3. שמרים ואמבט</button>
+          <button onClick={runPrepStep4} disabled={prepStage!==3||isSeqAnimating} className="w-full md:w-auto px-1 py-2 md:px-4 md:py-2.5 bg-emerald-500 text-white font-bold rounded-lg shadow-sm text-[13px] sm:text-sm md:text-base flex items-center justify-center text-center leading-tight">4. גלוקוז ומיהול</button>
+          <button onClick={resetPartB} className="col-span-2 md:col-span-1 w-full md:w-auto px-1 py-2 md:px-4 md:py-2.5 bg-stone-200 font-bold rounded-lg shadow-sm text-[13px] sm:text-sm md:text-base flex items-center justify-center text-center leading-tight gap-1.5"><span>↺</span> איפוס</button>
         </div>
         
-        {/* הגרף עם כל המרכיבים */}
-        <div className="w-full max-w-3xl bg-white rounded-xl p-1 md:p-2 ltr border border-stone-100 relative">
-          <svg viewBox="0 0 650 350" className="w-full h-auto">
-            {/* כותרת הגרף */}
-            <text x="280" y="25" fontSize="16" fill="#1c1917" textAnchor="middle" fontWeight="bold">
-              השפעת ריכוזי מלח על קצב פעילות קטלאז בשני זנים של יבלית
-            </text>
-            
-            {/* מקרא מסודר - טקסט בצד ימין, סמלים בצד שמאל */}
-            <g transform="translate(540, 20)">
-              <rect x="0" y="0" width="90" height="65" fill="white" stroke="#ccc" rx="4"/>
-              
-              <text x="80" y="22" fontSize="13" fontWeight="bold" textAnchor="end" fill="#333">מקרא:</text>
-              
-              <text x="80" y="42" fontSize="13" fill="#333" textAnchor="end">זן א'</text>
-              <path d="M 10 38 L 35 38" stroke="#d97706" strokeWidth="2" strokeDasharray="5,5" />
-              <circle cx="22.5" cy="38" r="4" fill="#fef3c7" stroke="#d97706" strokeWidth="2" />
-              
-              <text x="80" y="58" fontSize="13" fill="#333" textAnchor="end">זן ב'</text>
-              <path d="M 10 54 L 35 54" stroke="#78350f" strokeWidth="2" />
-              <circle cx="22.5" cy="54" r="4" fill="#78350f" />
-            </g>
+        <div className="relative w-full max-w-4xl mx-auto h-[320px] sm:h-[340px] md:h-[380px] bg-white rounded-xl border border-stone-200 overflow-hidden flex justify-center items-end pb-4 pt-16 md:pt-20 shadow-inner">
+          <div className="absolute top-0 left-0 w-full bg-emerald-100/90 border-b border-emerald-200 p-2 md:p-3 z-40 text-center shadow-sm min-h-[44px] flex items-center justify-center transition-all duration-300">
+            <p className="text-xs md:text-sm text-emerald-900 px-2 leading-snug">
+              {prepStage === 0 && "לחצו על השלבים למעלה כדי להתחיל בהכנת הניסוי והאנימציה."}
+              {prepStage === 1 && <span><strong>הכנת דסקיות:</strong> נחתוך דסקיות אגר ובהן שמרים מקובעים בעזרת קשית קצרה.</span>}
+              {prepStage === 2 && <span><strong>מים ואתנול:</strong> נוסיף מים מזוקקים ואתנול למבחנות.</span>}
+              {prepStage === 3 && <span><strong>הוספת שמרים:</strong> נוסיף 8 דסקיות לכל מבחנה ונכניס לאמבט מים.</span>}
+              {prepStage === 4 && <span><strong>גלוקוז ומיהול סדרתי:</strong> נוסיף תמיסת גלוקוז, נבצע מיהול בין המבחנות ונדגיר באמבט מים (38-42°C).</span>}
+            </p>
+          </div>
+          
+          <div className={`absolute bottom-0 left-0 right-0 z-20 transition-all duration-1000 ${tubesY > 0 ? 'h-32 md:h-40 water-bath' : 'h-0 opacity-0'}`}></div>
+          {tubesY > 0 && <div className="absolute top-[60px] right-4 md:top-[60px] md:right-6 bg-white p-2 md:p-3 rounded-xl shadow-lg z-30 border border-stone-200 flex flex-col items-center"><span className="text-[10px] md:text-xs font-bold text-stone-600">טמפרטורת אמבט</span><span className="text-lg md:text-xl font-mono font-extrabold text-rose-500">40°C</span></div>}
+          {prepTimer>0 && <div className="absolute top-[60px] left-4 md:top-[60px] md:left-6 bg-white p-2 md:p-3 rounded-xl shadow-lg z-30 border border-stone-200 flex flex-col items-center"><span className="text-[10px] md:text-xs font-bold text-stone-600">זמן הדגרה</span><span className="text-xl md:text-2xl font-mono font-extrabold text-orange-500">{prepTimer}:00</span></div>}
+          
+          {prepStage===1 && (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-50 z-10 overflow-hidden pt-[50px]">
+              <div className="relative w-[400px] h-[280px] shrink-0 scale-[0.7] sm:scale-[0.85] md:scale-100 origin-bottom">
+                <div className="absolute bottom-4 left-[20px] flex flex-col items-center">
+                  <div className="w-40 h-20 bg-stone-200 rounded-[50%] border-[5px] border-stone-300 relative shadow-md flex items-center justify-center">
+                    <div className="w-32 h-14 bg-white/90 rounded-[50%] border border-stone-200 shadow-inner"></div>
+                    <div className="absolute flex flex-wrap gap-2 w-16 top-6 right-12">
+                      {towelDisks.map(i => <div key={i} className="w-3.5 h-3.5 bg-amber-700 rounded-full shadow-sm"></div>)}
+                    </div>
+                  </div>
+                  <span className="mt-4 font-bold text-base">מגבת נייר לחה</span>
+                </div>
+                <div className="absolute bottom-4 right-[20px] flex flex-col items-center">
+                  <div className="w-40 h-20 bg-[#e6ceb3] rounded-[50%] border-[5px] border-[#c4a482] relative shadow-lg flex items-center justify-center overflow-hidden">
+                    <div className="absolute bottom-0 w-full h-8 bg-[#c4a482] rounded-b-[50%] opacity-50"></div>
+                    {agarHoles.map((pos, idx) => (
+                      <div key={idx} className="absolute w-4 h-4 rounded-full bg-[#9e7e5d] shadow-inner border border-[#8a6847]" style={{ top: `${pos.top}px`, left: `${pos.left}px` }}></div>
+                    ))}
+                  </div>
+                  <span className="mt-4 font-bold text-base">מצע אגר (שמרים)</span>
+                </div>
+                {strawPos.visible && <div className="straw" style={{ right: `${strawPos.right}px`, bottom: `${strawPos.bottom}px` }}></div>}
+              </div>
+            </div>
+          )}
 
-            <g stroke="#e5e7eb" strokeWidth="1">
-              {[...Array(11)].map((_, i) => <line key={i} x1="80" y1={250 - i*20} x2="480" y2={250 - i*20} strokeDasharray={i > 0 ? "2,2" : ""} />)}
-              {[...Array(11)].map((_, i) => <line key={i} x1={80 + i*40} y1="50" x2={80 + i*40} y2="250" strokeDasharray="2,2" />)}
-            </g>
-            <polyline points="80,50 80,250 480,250" fill="none" stroke="#374151" strokeWidth="2" />
-            
-            <path d="M 80 150 Q 140 150 200 150 Q 240 150 280 90 Q 320 30 360 130 Q 420 160 480 190" fill="none" stroke="#78350f" strokeWidth="3" />
-            <path d="M 80 150 Q 140 150 200 150 Q 240 150 280 150 Q 320 150 360 68 Q 420 70 480 78" fill="none" stroke="#d97706" strokeWidth="3" strokeDasharray="6,6" />
-            
-            {/* נקודות זן ב' */}
-            <circle cx="80" cy="150" r="4" fill="#78350f" />
-            <circle cx="200" cy="150" r="4" fill="#78350f" />
-            <circle cx="280" cy="90" r="4" fill="#78350f" />
-            <circle cx="360" cy="130" r="4" fill="#78350f" />
-            <circle cx="480" cy="190" r="4" fill="#78350f" />
 
-            {/* נקודות זן א' */}
-            <circle cx="80" cy="150" r="4" fill="#fef3c7" stroke="#d97706" strokeWidth="2" />
-            <circle cx="280" cy="150" r="4" fill="#fef3c7" stroke="#d97706" strokeWidth="2" />
-            <circle cx="360" cy="68" r="4" fill="#fef3c7" stroke="#d97706" strokeWidth="2" />
-            <circle cx="480" cy="78" r="4" fill="#fef3c7" stroke="#d97706" strokeWidth="2" />
-            
-            {/* מספרי ציר Y */}
-            <g fontSize="12" fill="#57534e" textAnchor="end">
-              {[...Array(11)].map((_, i) => (
-                <text key={`ty${i}`} x="70" y={250 - i*20 + 4}>{i*5}</text>
+          <div className="w-full flex justify-center scale-75 sm:scale-90 md:scale-100 origin-bottom">
+            <div className="flex gap-4 md:gap-8 relative z-10 transition-transform duration-1000" style={{ transform: `translateY(${tubesY}px)`, opacity: prepStage>=2?1:0 }}>
+              {tubesData.map((t, i) => (
+                <div key={i} className="flex flex-col items-center relative w-14">
+                  {pipetteState.tubeId===(i+1) && <div className="absolute bottom-full mb-4 w-full flex flex-col items-center transition-all duration-400 z-40" style={{ transform: `translateY(${pipetteState.y}px)` }}><div className="pipette-tip relative"><div className={`pipette-liquid ${pipetteState.type === 'water' ? 'bg-sky-300' : pipetteState.type === 'ethanol' ? 'bg-purple-300' : pipetteState.type === 'glucose' ? 'bg-green-400' : 'bg-transparent'}`} style={{ height: pipetteState.liquidHeight }}></div></div>{pipetteState.dropping && [1,2,3].map(d => <div key={d} className={`falling-drop drop-${pipetteState.type}`} style={{ animationDelay: `${d*0.1}s` }}></div>)}</div>}
+                  {spoonState.tubeId===(i+1) && <div className="absolute bottom-full mb-8 z-50 left-1/2 translate-x-[35px]"><svg viewBox="0 0 100 40" className="spoon relative z-40" style={{ transform: spoonState.rotated ? 'rotate(-45deg)' : 'rotate(0deg)' }}><rect x="30" y="15" width="70" height="8" rx="4" fill="#cbd5e1" stroke="#94a3b8" strokeWidth="1.5"/><ellipse cx="20" cy="19" rx="20" ry="12" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="1.5"/>{!spoonState.dropping && <g fill="#b45309"><circle cx="16" cy="16" r="3"/><circle cx="22" cy="14" r="3"/><circle cx="19" cy="11" r="3"/><circle cx="25" cy="17" r="3"/></g>}</svg>{spoonState.dropping && <div className="absolute top-2 left-[-35px] z-50 flex flex-col items-center gap-0.5 animate-[disk-drop_1s_ease-in_forwards]"><div className="w-2.5 h-2.5 bg-amber-700 rounded-full shadow-sm translate-x-1"></div><div className="w-2.5 h-2.5 bg-amber-700 rounded-full shadow-sm -translate-x-1"></div><div className="w-2.5 h-2.5 bg-amber-700 rounded-full shadow-sm translate-x-2"></div><div className="w-2.5 h-2.5 bg-amber-700 rounded-full shadow-sm"></div></div>}</div>}
+                  <div className="w-14 h-48 border-x-[5px] border-b-[5px] border-stone-300 relative bg-white/95 overflow-hidden shadow-inner mt-2" style={{ borderBottomLeftRadius: '2rem', borderBottomRightRadius: '2rem' }}>
+                    <div className="absolute bottom-0 w-full flex flex-col justify-end h-full">
+                      <div className="tube-liquid bg-sky-200" style={{ height: `${t.water}%` }}></div>
+                      <div className="tube-liquid bg-purple-200" style={{ height: `${t.eth}%` }}></div>
+                      <div className="tube-liquid bg-green-200" style={{ height: `${t.gluc}%` }}></div>
+                    </div>
+                    {t.disks > 0 && <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 flex flex-wrap justify-center gap-1 w-12 z-10">{[...Array(t.disks)].map((_, j) => <div key={j} className="w-2.5 h-2.5 rounded-full bg-amber-600"></div>)}</div>}
+                    {t.stopper && <div className="absolute top-0 left-0 right-0 h-5 bg-amber-800 border-b-2 border-amber-900 shadow-md"></div>}
+                  </div><span className="mt-4 font-extrabold text-stone-800 bg-white/90 px-4 py-1 rounded-lg border border-stone-200 shadow-sm text-[10px] sm:text-xs md:text-[15px] whitespace-nowrap text-right">מבחנה {t.id}</span>
+                </div>
               ))}
-            </g>
+              {showWaste && (
+                <div className="flex flex-col items-center relative w-16 md:w-20 transition-opacity duration-500 text-right">
+                  {pipetteState.tubeId === 'waste' && (
+                    <div className="absolute bottom-full mb-4 w-full flex flex-col items-center transition-all duration-400 z-40" style={{ transform: `translateY(${pipetteState.y}px)` }}>
+                      <div className="pipette-tip relative">
+                        <div className="pipette-liquid bg-green-400" style={{ height: pipetteState.liquidHeight }}></div>
+                      </div>
+                      {pipetteState.dropping && [1,2,3].map(d => <div key={d} className="falling-drop drop-glucose" style={{ animationDelay: `${d*0.1}s` }}></div>)}
+                    </div>
+                  )}
+                  <div className="w-14 md:w-16 h-32 border-x-[4px] border-b-[4px] border-stone-400 relative bg-stone-100/80 overflow-hidden shadow-inner mt-20" style={{ borderBottomLeftRadius: '1.5rem', borderBottomRightRadius: '1.5rem' }}>
+                    <div className="absolute bottom-0 w-full bg-green-200/80 transition-all duration-1000 border-t border-green-300" style={{ height: wasteHeight }}></div>
+                  </div>
+                  <span className="mt-4 font-bold text-stone-600 bg-stone-200 px-3 py-1 rounded-lg border border-stone-300 text-[10px] sm:text-xs md:text-[15px] whitespace-nowrap">כלי פסולת</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
-            {/* מספרי ציר X */}
-            <g fontSize="12" fill="#57534e" textAnchor="middle">
-              {[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1].map((v, i) => (
-                <text key={`tx${i}`} x={80 + i*40} y="268">{v}</text>
+
+        <div className="w-full text-right mt-2 md:mt-3">
+          <table className="w-full text-center border-collapse bg-white border border-stone-300 text-[10px] sm:text-xs md:text-[15px] shadow-sm table-fixed">
+            <thead className="bg-stone-100 border-b-2 border-stone-300">
+              <tr>
+                <th className="p-1 md:p-2 border-x w-[10%] break-words">מבחנה</th>
+                <th className="p-1 md:p-2 border-x w-[18%] break-words">מים מזוקקים (מ"ל)</th>
+                <th className="p-1 md:p-2 border-x w-[18%] break-words">אתנול 70% (מ"ל)</th>
+                <th className="p-1 md:p-2 border-x w-[18%] break-words">דסקיות שמרים</th>
+                <th className="p-1 md:p-2 border-x w-[22%] text-stone-700 break-words">תמיסת גלוקוז 0.5M</th>
+                <th className="p-1 md:p-2 border-x w-[14%] break-words">זמן באמבט</th>
+              </tr>
+            </thead>
+            <tbody>
+              {prepTable.map((row) => (
+                <tr key={row.id} className="border-b">
+                  <td className="p-1 md:p-2 border-x font-bold text-stone-800 text-center">{row.id}</td>
+                  <td className="p-1 md:p-2 border-x text-stone-600 text-center">{row.water}</td>
+                  <td className="p-1 md:p-2 border-x text-stone-600 text-center">{row.eth}</td>
+                  <td className="p-1 md:p-2 border-x text-stone-600 text-center">{row.disks}</td>
+                  <td className="p-1 md:p-2 border-x leading-tight md:leading-relaxed font-bold text-stone-700 text-center text-[9px] sm:text-[10px] md:text-[15px]">{row.gluc}</td>
+                  <td className="p-1 md:p-2 border-x font-bold text-stone-800 text-center">{row.time}</td>
+                </tr>
               ))}
-            </g>
-
-            {/* כותרת ציר X */}
-            <text x="280" y="310" fontSize="14" fill="#1c1917" textAnchor="middle" fontWeight="bold">
-              ריכוז מלח NaCl בתמיסת הגידול (%)
-            </text>
-
-            {/* כותרת ציר Y */}
-            <text transform="translate(30, 150) rotate(-90)" fill="#1c1917" textAnchor="middle" fontWeight="bold" fontSize="14">
-              <tspan x="0" y="0">קצב פעילות האנזים קטלאז</tspan>
-              <tspan x="0" y="20">(יחידות יחסיות)</tspan>
-            </text>
-          </svg>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <MultipleChoiceQnA qNum="11. א" question="על סמך הנתונים, איזה זן יבלית מותאם לגידול בתנאי מליחות גבוהים (0.7% ומעלה)?" options={["אף אחד מהזנים.", "שני הזנים באופן זהה.", "זן ב' מותאם, זן א' לא.", "זן א' מותאם, זן ב' לא."]} correctAnswerIndex={3} explanation="זן א' מצליח לשמור על פעילות אנזימטית גבוהה יחסית גם בריכוזי מלח גבוהים." />
-      
+
+      <div className="bg-emerald-50/70 p-4 md:p-6 rounded-2xl mb-8 border border-emerald-100 shadow-sm mt-8 text-stone-800 leading-relaxed text-right">
+        <h3 className="font-bold text-emerald-900 mb-3 text-base md:text-lg">📋 שלב ב2: בדיקת הכמות היחסית של חומצה בכל אחת מן המבחנות D-A</h3>
+        <p className="text-sm md:text-[16px] mb-2">
+          בתגובה בין פחמן דו חמצני (CO2) ובין מים נוצרת חומצה (חומצה פחמתית). נמדוד כמה חומצה נוצרה בכל אחת מהן.
+        </p>
+        <p className="text-emerald-800 font-bold text-sm md:text-base mt-2">הפעילו את שלבי הטיטרציה באנימציה ועקבו אחר ההנחיות המופיעות בה:</p>
+      </div>
+
+
+      <div className="bg-white border-2 border-stone-100 p-3 md:p-5 rounded-2xl mb-12 shadow-sm relative overflow-hidden text-right">
+        <div className="grid grid-cols-2 md:flex md:flex-wrap justify-center gap-2 mb-2 bg-stone-50 p-2 md:p-3 rounded-xl border border-stone-200">
+          <button onClick={handleTitrStep1} disabled={titrStage!==0||isAnyAnimating} className="w-full md:w-auto px-1 py-2 md:px-5 md:py-2.5 bg-stone-500 text-white font-bold rounded-lg shadow-sm text-[13px] sm:text-sm md:text-base flex items-center justify-center text-center leading-tight">1. סימון 3 ס"מ</button>
+          <button onClick={handleTitrStep2} disabled={titrStage!==1||isAnyAnimating} className="w-full md:w-auto px-1 py-2 md:px-5 md:py-2.5 bg-blue-500 text-white font-bold rounded-lg shadow-sm text-[13px] sm:text-sm md:text-base flex items-center justify-center text-center leading-tight">2. העברת נוזלים</button>
+          <button onClick={handleTitrStep3} disabled={titrStage!==2||isSeqAnimating} className="w-full md:w-auto px-1 py-2 md:px-5 md:py-2.5 bg-purple-500 text-white font-bold rounded-lg shadow-sm text-[13px] sm:text-sm md:text-base flex items-center justify-center text-center leading-tight">3. פנול-פתלאין</button>
+          <button onClick={handleTitrStep4} disabled={titrStage!==3||isSeqAnimating} className="w-full md:w-auto px-1 py-2 md:px-5 md:py-2.5 bg-pink-500 text-white font-bold rounded-lg shadow-sm text-[13px] sm:text-sm md:text-base flex items-center justify-center text-center leading-tight">4. טפטוף בסיס</button>
+          <button onClick={resetPartB} className="col-span-2 md:col-span-1 w-full md:w-auto px-1 py-2 md:px-5 md:py-2.5 bg-stone-200 font-bold rounded-lg shadow-sm shadow-inner text-[13px] sm:text-sm md:text-base flex items-center justify-center text-center leading-tight gap-1.5"><span>↺</span> איפוס</button>
+        </div>
+        
+        <div className="relative w-full max-w-4xl mx-auto border border-stone-100 rounded-xl bg-slate-50 shadow-inner overflow-hidden flex justify-center items-end h-[240px] sm:h-[260px] md:h-[300px] pb-2 pt-14 md:pt-16">
+          <div className="absolute top-0 left-0 w-full bg-emerald-100/90 border-b border-emerald-200 p-2 z-40 text-center shadow-sm min-h-[44px] flex items-center justify-center transition-all duration-300">
+            <p className="text-xs md:text-sm text-emerald-900 px-2 leading-snug">
+              {titrStage === 0 && "לחצו על השלבים למעלה כדי להתחיל בבדיקת החומציות (טיטרציה)."}
+              {titrStage === 1 && <span><strong>סימון גובה:</strong> נסמן על 4 מבחנות חדשות (A1-D1) קו בגובה 3 ס"מ.</span>}
+              {titrStage === 2 && <span><strong>העברת נוזל:</strong> נעביר מכל מבחנה (1-4) את נוזל ההדגרה למבחנה החדשה עד לקו ה-3 ס"מ.</span>}
+              {titrStage === 3 && <span><strong>הוספת אינדיקטור:</strong> נוסיף 2 טיפות פנול-פתלאין לכל מבחנה.</span>}
+              {titrStage === 4 && <span><strong>טיטרציה:</strong> נטפטף בסיס (NaOH) ונספור טיפות עד לקבלת צבע ורוד יציב.</span>}
+            </p>
+          </div>
+          <div className="flex justify-center items-end gap-8 md:gap-16 scale-75 sm:scale-90 md:scale-100 origin-bottom w-full">
+            {['a', 'b', 'c', 'd'].map((id) => (
+              <div key={id} className="flex flex-col items-center relative w-16 text-right">
+                <div className={`absolute bottom-full mb-2 w-full flex flex-col items-center justify-end z-40 min-h-[55px] transition-opacity duration-300 ${(titrPipette.visible&&titrPipette.tubeId===id)||titrStage===4 ? 'opacity-100' : 'opacity-0'}`}>
+                  {titrPipette.visible && titrPipette.tubeId === id && (<><div className="pipette-tip relative"><div className={`pipette-liquid ${titrPipette.type==='indicator'?'bg-slate-200':'bg-blue-300'}`} style={{ height: '50%' }}></div></div>{titrPipette.dropping && [1,2,3].map(d => <div key={d} className={`falling-drop ${titrPipette.type==='indicator'?'drop-indicator':'drop-mixed'}`} style={{ animationDelay: `${d*0.15}s` }}></div>)}</>)}
+                  {titrStage === 4 && (<><div className="pipette-tip relative"><div className="pipette-liquid bg-sky-400" style={{ height: '70%' }}></div></div>{activeTitrDrops[id].map(dropId => <div key={`${id}-${dropId}`} className="falling-drop drop-base"></div>)}</>)}
+                </div>
+                <div className="w-14 md:w-16 h-36 border-x-[5px] border-b-[5px] border-stone-300 relative bg-stone-50 mt-4 overflow-hidden" style={{ borderBottomLeftRadius: '2rem', borderBottomRightRadius: '2rem' }}>
+                  {titrStage >= 1 && <div className="absolute bottom-[35%] w-full border-b-[2px] border-rose-500 border-dashed z-20"></div>}
+                  {titrStage >= 2 && <div className="tube-liquid absolute bottom-0" style={{ height: titrLiquidHeight[id], backgroundColor: titrPink[id] ? '#f9a8d4' : 'rgba(226, 232, 240, 0.6)' }}></div>}
+                </div><span className="mt-4 font-bold text-[10px] sm:text-xs md:text-[15px] whitespace-nowrap text-stone-800">מבחנה {id.toUpperCase()}1</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+
+        <div className="w-full mt-2 md:mt-3 text-right">
+          <table className="w-full text-center border-collapse bg-white shadow-sm border border-stone-300 text-[10px] sm:text-xs md:text-[15px] text-stone-700 font-bold table-fixed">
+            <thead className="bg-stone-100 border-b-2 border-stone-300">
+              <tr>
+                <th className="p-1 md:p-2 border-x w-[15%] break-words">מבחנה</th>
+                <th className="p-1 md:p-2 border-x w-[35%] break-words">הכנסת נוזל עד קו של 3 ס"מ</th>
+                <th className="p-1 md:p-2 border-x w-[25%] break-words">מספר טיפות פנול-פתלאין</th>
+                <th className="p-1 md:p-2 border-x w-[25%] break-words">מספר טיפות בסיס עד לשינוי צבע</th>
+              </tr>
+            </thead>
+            <tbody>
+              {titrTable.map((row) => (
+                <tr key={row.id} className="border-b text-stone-800 text-center">
+                  <td className="p-1 md:p-2 border-x font-bold text-stone-800">{row.id}</td>
+                  <td className="p-1 md:p-2 border-x text-stone-600">{row.transfer}</td>
+                  <td className="p-1 md:p-2 border-x text-stone-600">{row.ind}</td>
+                  <td className="p-1 md:p-2 border-x font-mono font-bold text-sm md:text-lg text-sky-800 text-center">{row.base}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+
+      {/* Part B Questions Section */}
       <MultipleChoiceQnA 
-        qNum="11. ב" 
-        question="איזה נימוק מסביר בצורה הטובה ביותר את הקביעה שלכם?" 
-        options={[
-          "בניסוי 1 זן א' הראה עלייה במי חמצן, מה שמעיד על התאמה.",
-          "בזן א' רמת מי החמצן נשמרת נמוכה (ניסוי 1), ופעילות הקטלאז נשארת גבוהה (ניסוי 2).",
-          "בזן ב' פעילות הקטלאז עולה ב-0.7%, מה שמגן עליו.",
-          "אין קשר בין ניסוי 1 לניסוי 2."
-        ]}
-        correctAnswerIndex={1}
-        explanation={`לזן א' (המותאם): לפי ניסוי 1, רמת מי החמצן (שהם רעילים) נשמרת נמוכה בכל ריכוזי המלח. לפי ניסוי 2, פעילות האנזים קטלאז נשארת גבוהה גם בריכוזי מלח גבוהים. לזן ב' (שאינו מותאם): לפי ניסוי 1, בריכוזים הגבוהים חלה עלייה ברמת מי החמצן. לפי ניסוי 2, רואים ירידה תלולה בפעילות האנזים קטלאז ככל שעולה ריכוז המלח.`} 
+        qNum="3" 
+        question="חשבו את ריכוזי הגלוקוז במבחנות 1-3 על פי הנתונים הבאים: מבחנה 1 קיבלה 5 מ''ל גלוקוז בריכוז 0.5M ו-5 מ''ל מים. מבחנה 2 קיבלה 1 מ''ל מהתמיסה של מבחנה 1 ו-9 מ''ל מים. מבחנה 3 קיבלה 1 מ''ל ממבחנה 2 ו-9 מ''ל מים." 
+        options={["במבחנה 1 הריכוז הוא 0.25M, במבחנה 2 הריכוז הוא 0.025M ובמבחנה 3 הריכוז הוא 0.0025M.", "במבחנה 1 הריכוז הוא 0.10M, במבחנה 2 הריכוז הוא 0.010M ובמבחנה 3 הריכוז הוא 0.0010M.", "במבחנה 1 הריכוז הוא 0.50M, במבחנה 2 הריכוז הוא 0.250M ובמבחנה 3 הריכוז הוא 0.1250M.", "במבחנה 1 הריכוז הוא 0.25M, במבחנה 2 הריכוז הוא 0.125M ובמבחנה 3 הריכוז הוא 0.0625M."]} 
+        correctAnswerIndex={0} 
+        explanation="במבחנה 1: הוסיפו 5 מ''ל תמיסת גלוקוז (0.5M) ל-5 מ''ל מים, התמיסה נמהלה פי 2 ולכן הריכוז ירד פי 2 (0.25M). במבחנה 2: הוסיפו 1 מ''ל מהתמיסה ל-9 מ''ל מים, התמיסה נמהלה פי 10 ולכן הריכוז ירד פי 10 (0.025M). במבחנה 3 נמהלה התמיסה פי 10 נוספים (0.0025M)." 
       />
 
-      <MultipleChoiceQnA 
-        qNum="12. א" 
-        question="היעזרו בתשובתכם על שאלה 7, מהי הסיבה להבדל בין תוצאות הניסוי שערכתם בחלק ב ובין התוצאות שהתקבלו בנוגע לזן המותאם בניסוי 2 של החוקרים?" 
-        options={[
-          "בעדשים המלח חדר ופגע באנזים, בעוד שביבלית זן א' ייתכן שיש מנגנון המונע כניסת מלח לתא או שהאנזים עמיד.",
-          "צמחי עדשים מבצעים פוטוסינתזה חזקה יותר המעכבת את הפירוק, בעוד שביבלית הפוטוסינתזה חלשה יחסית.",
-          "בעדשים האנזים קטלאז מזרז בניית מי חמצן במקום פירוקם, מה שמוביל להרעלה מהירה בתנאי מליחות קיצוניים.",
-          "ביבלית מזן א' האנזים קטלאז אינו קיים כלל באופן טבעי, ולכן התגובה לא יכלה להיפגע מנוכחות של יוני מלח."
-        ]}
-        correctAnswerIndex={0}
-        explanation={`הסיבה להבדל: בעדשים יוני הנתרן (מהמלח) חדרו וגרמו לדנטורציה (שינוי מבנה מרחבי) בחלבונים/אנזים ולירידה בפעילותו. לעומת זאת, ביבלית מזן א' (המותאם), ייתכן שיש מנגנון המונע כניסת מלח לתא, או שהחלבון/האנזים שלו עמיד למליחות ומבנהו המרחבי אינו נפגע.`} 
+
+      <ClassificationTable 
+        qNum="4"
+        question="לפניכם ארבעה מִבֵּין רכיבי הניסוי שערכתם בחלק ב. סווגו כל רכיב לתפקידו המתאים:"
+        rows={["מספר טיפות הבסיס NaOH שנדרשו לשינוי צבע התמיסה","קצב הנשימה התאית בשמרים מקובעים באגר","טמפרטורת המים באמבט","מספר הטיפות של פנול-פתלאין"]}
+        options={["גורם קבוע", "משתנה תלוי", "דרך המדידה"]}
+        correctAnswers={[2, 1, 0, 0]}
+        explanation="קצב הנשימה התאית הוא משתנה תלוי. מספר טיפות הבסיס (NaOH) שנדרשו לשינוי צבע התמיסה הוא דרך המדידה של המשתנה התלוי. טמפרטורת המים באמבט ומספר הטיפות של פנול-פתלאין הם גורמים קבועים."
       />
 
-      <MultipleChoiceQnA 
-        qNum="12. ב" 
-        question="איזו השפעה נוספת של מלח המצוי בקרקע יש על צמחים, מלבד מה שרשום בלידיעתכם 1?" 
-        options={[
-          "המלח מעלה בצורה משמעותית את טמפרטורת הקרקע במהלך שעות היום, מה שגורם לשריפת השורשים ולהפסקת הצמיחה.",
-          "ריכוז מלחים גבוה יוצר סביבה היפרטונית המורידה את פוטנציאל המים בקרקע, ומקשה על הצמח לקלוט מים לתוכו.",
-          "נוכחות של מלח בריכוז גבוה מזרזת את קצב הפריחה של הצמח, ולכן הוא מסיים את מחזור חייו מהר ומתייבש.",
-          "המלח המצטבר בקרקע מונע באופן ישיר כניסת פחמן דו-חמצני דרך הפיוניות, ובכך עוצר לגמרי את הפוטוסינתזה."
-        ]}
-        correctAnswerIndex={1}
-        explanation={`השפעה אוסמוטית. ריכוז מלחים גבוה בקרקע גורם לירידת פוטנציאל המים (או יצירת סביבה היפרטונית בקרקע ביחס לצמח). כתוצאה מכך, קשה לצמח לקלוט מים מן הקרקע (או אפילו מים עלולים לצאת מהצמח לקרקע), והצמח נמצא בסכנת התייבשות / קמילה / פגיעה בטורגור.`} 
-      />
+
+      <MultipleChoiceQnA qNum="5" question="הימצאות אתנול במבחנות היא משתנה בלתי תלוי אחד בניסוי שערכתם. מהו המשתנה הבלתי תלוי האחר בניסוי שערכתם?" options={["ריכוז הגלוקוז בתמיסה שבתוך כל מבחנה.","קצב פליטת הפחמן הדו-חמצני במהלך הנשימה.","מספר דסקיות השמרים המקובעות בתוך האגר.","טמפרטורת אמבט המים במהלך שלב ההדגרה."]} correctAnswerIndex={0} explanation="המשתנה הבלתי תלוי האחר בניסוי הוא ריכוז הגלוקוז בתמיסות שבהן שרו השמרים." />
+      <MultipleChoiceQnA qNum="6" question="מדוע חשוב שדווקא מספר דסקיות שמרים (8 דסקיות) יהיה גורם קבוע בניסוי שערכתם?" options={["כיוון שכמות השמרים משפיעה על קצב הנשימה ופליטת ה-CO2.","כדי להבטיח שלכל השמרים תהיה גישה שווה לחמצן באוויר.","כדי שהמיהולים של הגלוקוז יישארו מדויקים לאורך זמן הניסוי.","כדי שדסקיות האגר לא יתפרקו עקב כמות גדולה של תוצרי לוואי."]} correctAnswerIndex={0} explanation="כמות השמרים (התאים / האנזימים) משפיעה על קצב תהליך הנשימה התאית. בניסוי נבדקה ההשפעה של משתנה בלתי תלוי אחר (ריכוז גלוקוז והימצאות אתנול), ולכן כל שאר הגורמים צריכים להישמר קבועים." />
+      <MultipleChoiceQnA qNum="7" question="הציעו הסבר לתוצאות הניסוי שהתקבלו במבחנות C-A (הקשר בין גלוקוז לטיטרציה):" options={["ככל שריכוז הגלוקוז גבוה, נוצר יותר CO2 שיוצר חומצה המצריכה בסיס.","ריכוז גלוקוז נמוך מזרז את נשימת השמרים ולכן מצריך יותר בסיס.","הגלוקוז הוא בסיסי וסותר את החומצה הפחמתית הנוצרת במים.","אין קשר ישיר בין ריכוז הגלוקוז במבחנות לבין כמות החומצה שנמדדה."]} correctAnswerIndex={0} explanation="הגלוקוז הוא מגיב / מצע / סובסטרט בתהליך הנשימה התאית. ככל שריכוז הגלוקוז גבוה יותר, קצב תהליך הנשימה גבוה יותר. כתוצאה מכך נוצר יותר CO2 ונוצרת יותר חומצה פחמתית, ולכן נדרש מספר גדול יותר של טיפות בסיס לנטרול החומצה (עד לקבלת צבע ורוד)." />
+      <MultipleChoiceQnA qNum="8" question="הציעו הסבר להבדל בין התוצאה שקיבלתם במבחנה D לתוצאה במבחנה A:" options={["אתנול הוא חומר הממס שומנים ופוגע בחלבונים, מה שמעכב את הנשימה.","האתנול מזרז את נשימת השמרים וגורם ליצירה מוגברת מאוד של פד''ח.","האתנול מגיב עם פנול-פתלאין ומשנה את צבעו מראש ללא קשר ל-pH.","ריכוז הגלוקוז במבחנה D1 היה נמוך משמעותית מריכוז הגלוקוז במבחנה A1."]} correctAnswerIndex={0} explanation="במבחנה D קיים אתנול בניגוד למבחנה A. האתנול פוגע בקרומי תאי השמרים, בחלבונים ובאנזימי הנשימה, ולכן קצב תהליך הנשימה התאית איטי יותר. כתוצאה מכך נוצר פחות CO2 ופחות חומצה, ולכן נדרש מספר קטן יותר של טיפות בסיס לנטרול החומצה." />
+      <MultipleChoiceQnA qNum="9" question="מהי החשיבות של הוספת מבחנת בקרה המכילה מים ודסקיות שמרים בלבד (ללא גלוקוז)?" options={["כדי לוודא שהשינוי בחומציות נובע רק מפירוק הגלוקוז בתהליך הנשימה.","לבדיקת עמידות הדסקיות לאורך זמן בטמפרטורה הגבוהה של האמבט.","כדי להשוות את קצב ייצור האתנול הפנימי של השמרים ללא סוכר חיצוני.","כדי להוכיח שהאגר אינו מתפרק במים ומפריש חומרים בסיסיים למבחנה."]} correctAnswerIndex={0} explanation="הבקרה נועדה לשלול הסבר חלופי שעל פיו שינוי ה-pH מתרחש עקב תהליך אחר שאינו קשור להשפעת גלוקוז על קצב הנשימה התאית, וכן כדי לוודא שללא גלוקוז אין בשמרים תהליך שגורם לשינוי חומציות/בסיסיות התמיסה." />
+      <MultipleChoiceQnA qNum="10" question="תלמידים טענו שהשפעת האתנול על קצב נשימה תאית תהיה דומה בכל היצורים החיים. האם טענתם נכונה?" options={["כן, כי מבנה קרום התא והאנזימים דומה בבסיסו בכל היצורים החיים.","לא, כי רק יצורים חד-תאיים כמו שמרים נפגעים מממיסים אורגניים.","כן, כי אתנול הוא מקור אנרגיה חיובי עבור כל סוגי התאים בטבע.","לא, כי חדירות האתנול לתאים של יונקים נמוכה בהרבה מלתאי שמרים."]} correctAnswerIndex={0} explanation="כן. לכל התאים יש חלבונים וקרומים. האתנול פוגע בחלבונים ובקרומי תאים, ולכן השפעת האתנול צפויה להיות דומה בכל היצורים." />
     </div>
   );
 };
 
-// --- Main Application ---
-const App = () => {
-  return (
-    <div className="rtl min-h-screen bg-orange-50/20 text-stone-900 font-sans p-2 md:p-6">
-      <style>{customStyles}</style>
-      <div className="max-w-5xl mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden border border-amber-100">
-        <header className="bg-gradient-to-l from-stone-800 via-amber-800 to-orange-700 text-white p-6 md:p-8 text-center shadow-lg">
-          <h1 className="text-xl md:text-3xl font-black mb-2 tracking-tight" style={{ fontFamily: "'Rubik', sans-serif" }}>מעבדה בביולוגיה: פעילות אנזים קטלאז</h1>
-          <div className="text-xs md:text-sm bg-white/10 inline-block px-4 py-1 rounded-full backdrop-blur-md border border-white/20 font-medium">בגרות 2022 בעיה 1</div>
-        </header>
 
-        <main className="p-4 md:p-8">
+const PartC = () => {
+  return (
+    <div className="mb-12 text-right">
+      <div className="flex items-center gap-3 mb-6 border-b-2 border-emerald-200 pb-3 text-right">
+        <h2 className="text-xl md:text-2xl font-bold text-emerald-900 text-right text-stone-900">חלק ג' - ניתוח תוצאות מחקר: השפעת ריכוז אתנול על התרבות שמרים</h2>
+      </div>
+
+
+      <div className="bg-emerald-50/70 p-4 md:p-6 rounded-2xl mb-8 border border-emerald-100 shadow-sm text-stone-800 leading-relaxed text-right">
+        <p className="mb-4 text-sm md:text-[15px]">אתנול הוא אחד התוצרים של תהליך התסיסה שמתרחש בשמרים. לאתנול יש ערך רב בתעשיית היין, הוא משמש דלק ביולוגי, חומר חיטוי ועוד.</p>
+        <p className="mb-4 text-sm md:text-[15px]">אתנול בריכוזים מסוימים שנמצא בסביבת השמרים, מגביל את קצב התהליכים שמתרחשים בתאי השמרים, ובעקבות זאת גם קצב ההתרבות של השמרים איטי יותר.</p>
+        <p className="mb-4 text-sm md:text-[15px]">חוקרים רבים מנסים למצוא זן של שמרים המסוגלים לחיות בסביבה שבה ריכוז האתנול גבוה, ולהתרבות בקצב מהיר.</p>
+        <h3 className="font-bold text-emerald-900 mb-2 text-right text-sm md:text-base">ניסוי 1</h3>
+        <p className="mb-4 text-sm md:text-[15px]">חוקרים הוסיפו אתנול בריכוזים שונים לתמיסת גידול ובה שמרים. הם בדקו את קצב ההתרבות של שני זני שמרים במשך 48 שעות. בטבלה 3 שלפניכם נתונים על קצב ההתרבות של השמרים בתמיסות שבהן אתנול בריכוזים שונים.</p>
+      </div>
+
+
+      <div className="bg-white p-4 md:p-8 border-2 border-stone-100 rounded-2xl shadow-sm mb-10 flex flex-col items-center text-right">
+        <h4 className="font-bold text-center mb-6 text-emerald-900 text-sm md:text-base bg-emerald-50 w-full py-3 rounded-lg px-2 md:pr-4 text-right">טבלה 3: קצב התרבות השמרים כתלות בריכוז אתנול</h4>
+        <div className="w-full overflow-x-auto pb-2 mx-auto mb-6">
+          <table className="w-full text-center border-collapse bg-white shadow-sm border border-stone-300 text-xs md:text-[15px] min-w-max">
+            <thead className="bg-stone-100 border-b-2 border-stone-300 text-stone-700 font-bold">
+              <tr><th className="p-2 md:p-3 border-x" rowSpan="2">ריכוז אתנול (%)</th><th className="p-2 md:p-3 border-x" colSpan="2">קצב התרבות (יחידות יחסיות)</th></tr>
+              <tr><th className="p-2 md:p-3 border-x">זן א'</th><th className="p-2 md:p-3 border-x">זן ב'</th></tr>
+            </thead>
+            <tbody>
+              {[[0,1.9,2.0],[4,1.9,2.1],[8,1.3,1.8],[10,0.7,1.6],[12,0.2,1.3],[16,0,0.5]].map((r,i)=>(
+                <tr key={i} className="border-b text-center"><td className="p-2 md:p-3 border-x font-bold text-stone-800">{r[0]}%</td><td className="p-2 md:p-3 border-x text-stone-600">{r[1]}</td><td className="p-2 md:p-3 border-x text-stone-600">{r[2]}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+
+      <MultipleChoiceQnA qNum="11" question="איזה סוג של הצגה גרפית הוא המתאים ביותר לתיאור התוצאות המוצגות בטבלה 3?" options={["גרף רציף (קו), כיוון שריכוז האתנול הוא משתנה כמותי רציף.","דיאגרמת עמודות, כיוון שההשוואה בין הזנים השונים היא המטרה העיקרית.","דיאגרמת עוגה, המראה את החלק היחסי של כל זן בכל מדידה.","גרף נקודות מפוזר, כיוון שאין קשר ישיר בין המדידות בטבלה."]} correctAnswerIndex={0} explanation="ההצגה הגרפית המתאימה היא גרף רציף (עקום). הנימוק לכך הוא שהמשתנה הבלתי תלוי (ריכוז אתנול) הוא משתנה רציף / כמותי / מדיד, ויש משמעות לערכי הביניים." />
+      <MultipleChoiceQnA qNum="12" question="תארו את התוצאות של ניסוי 1 כפי שהן משתקפות בנתוני טבלה 3." options={["ככל שריכוז האתנול עולה, חלה ירידה הדרגתית בקצב ההתרבות בשני הזנים.","קצב ההתרבות עולה עם עליית ריכוז האתנול עד לשיא מסוים ואז יורד.","ריכוז האתנול אינו משפיע על זן ב', אך גורם למותם של כל תאי זן א'.","זן א' מתרבה מהר יותר מזן ב' ככל שריכוז האתנול בתמיסה עולה."]} correctAnswerIndex={0} explanation="בטווח ריכוזי אתנול 0-4% אין כמעט שינוי בקצב ההתרבות של שני הזנים. ככל שריכוז האתנול גבוה יותר (מ-4% עד 16%), קצב ההתרבות של שני הזנים יורד. קצב ההתרבות של זן ב' יורד לאט יותר בהשוואה לזן א' ולכן הוא גבוה יותר." />
+      <MultipleChoiceQnA qNum="13" question="קבעו איזה משני הזנים - זן א או זן ב - עמיד יותר להשפעות האתנול. נמקו." options={["זן ב', כיוון שקצב ההתרבות שלו נותר גבוה יותר בהשוואה לזן א' בכל ריכוז.","זן א', כי הוא רגיש יותר ומגיב מהר אח יותר לשינויי ריכוז בסביבה.","שניהם עמידים באותה מידה בטווח הריכוזים של 0-4% אתנול.","לא ניתן לקבוע זאת בוודאות על פי הנתונים המוגבלים המופיעים בטבלה."]} correctAnswerIndex={0} explanation="זן ב' עמיד יותר להשפעות האתנול. הנימוק מהגרף: ניתן לראות שככל שמעלים את ריכוז האתנול, קצב ההתרבות של זן ב' גבוה יותר בהשוואה לזן א'. כמו כן, בריכוז הגבוה ביותר (16%) זן ב' ממשיך להתרבות בעוד זן א' אינו מתרבה כלל." />
+
+
+      <div className="bg-emerald-50/70 p-4 md:p-6 rounded-2xl mb-8 border border-emerald-100 shadow-sm mt-12 text-stone-800 leading-relaxed text-right">
+        <h3 className="font-bold text-emerald-900 mb-2 text-right text-sm md:text-base">ניסוי 2</h3>
+        <p className="mb-4 text-sm md:text-[15px]">בתאי השמרים קיים הסוכר טרהלוז המשמש חומר תשמורת. במחקרים נמצא כי הימצאות טרהלוז בתאי השמרים מגינה עליהם מפני הנזקים שהאתנול גורם לקרומי התא ולחלבונים. חוקרים מדדו את ריכוזי הטרהלוז בתאי השמרים. התוצאות מוצגות בגרף 2.</p>
+        
+        <div className="w-full max-w-3xl mx-auto bg-white border border-stone-200 rounded-xl shadow-inner pt-4 md:pt-6 mb-6">
+          <h4 className="font-bold text-sm md:text-base mb-4 text-center px-4">גרף 2: השפעת ריכוזי האתנול על ריכוז טרהלוז בתאי השמרים</h4>
+          <div className="w-full overflow-x-auto pb-4 px-2 md:px-6" dir="ltr">
+            <div className="min-w-[500px] w-full flex justify-center">
+              <svg viewBox="0 0 650 320" className="w-full h-auto ltr" style={{ fontFamily: "'Rubik', sans-serif" }}>
+                <g stroke="#e5e7eb" strokeWidth="1">{[0,40,80,120,160,200,240].map(v => <line key={v} x1="80" y1={250-v} x2="480" y2={250-v} strokeDasharray="2,2"/>)}</g>
+                <polyline points="80,50 80,250 480,250" fill="none" stroke="#374151" strokeWidth="2"/>
+                <path d="M 80 230 L 213 180 L 346 120 L 480 80" fill="none" stroke="#2563eb" strokeWidth="3"/>
+                <path d="M 80 220 L 213 150 L 346 80 L 480 30" fill="none" stroke="#ea580c" strokeWidth="3" strokeDasharray="6,4"/>
+                <g fontSize="11" textAnchor="end">{[0,5,10,15,20,25,30].map((v,i) => <text key={i} x="70" y={250-v*6.6+4}>{v}</text>)}</g>
+                <g fontSize="11" textAnchor="middle">{[0,5,10,15].map((v,i) => <text key={i} x={80+(v/15)*400} y="270">{v}</text>)}</g>
+                <text x="280" y="300" fontSize="13" fontWeight="bold">ריכוז אתנול (%)</text>
+                <text x="25" y="170" fontSize="13" fontWeight="bold" transform="rotate(-90 25,170)">ריכוז טרהלוז (יח' יחסיות)</text>
+                <g transform="translate(500,50)">
+                   <line x1="0" y1="0" x2="30" y2="0" stroke="#2563eb" strokeWidth="3"/><text x="35" y="5" fontSize="11">זן א'</text>
+                   <line x1="0" y1="20" x2="30" y2="20" stroke="#ea580c" strokeWidth="3" strokeDasharray="5,2"/><text x="35" y="25" fontSize="11">זן ב'</text>
+                </g>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <MultipleChoiceQnA qNum="14" question="על פי גרף 2 והמידע על סוכר הטרהלוז, מהוא ההסבר לתוצאות של זן ב בטבלה 1?" options={["זן ב' שומר על ריכוז טרהלוז גבוה יותר בכל הריכוזים, המגן על תאיו.","זן ב' מייצר פחות טרהלוז כדי לחסוך באנרגיה הדרושה להתמודדות עם האתנול.","הטרהלוז בזן ב' הופך לחומר רעיל בסביבת אתנול, מה שמזרז את ההתרבות.","אין קשר סיבתי מוכח בין רמת הטרהלוז בתא לבין קצב ההתרבות שנמדד."]} correctAnswerIndex={0} explanation="על פי הגרף, בזן ב' יש יותר טרהלוז ככל שריכוזי האתנול גבוהים יותר. טרהלוז מגן מפני השפעת האתנול, ולכן קצב ההתרבות של זן ב' גבוה יותר בהשוואה לזן א'." />
+      <div className="bg-emerald-50/70 p-4 md:p-6 rounded-2xl mb-8 border border-emerald-100 shadow-sm text-right mt-12 text-stone-800 leading-relaxed text-right">
+        <p className="mb-4 text-sm md:text-[15px]">בתאי השמרים יש אנזים שמזרז בנייה של הסוכר טרהלוז מחד־סוכרים, ויש אנזים אחר שמזרז פירוק של טרהלוז לחד־סוכרים. נמצא כי בתמיסה שבה ריכוז אתנול הוא 10%, קצב הפעילות של האנזים המזרז פירוק טרהלוז בזן ב נמוך בהשוואה לזן א, וקצב ההתרבות של זן ב גבוה יותר.</p>
+      </div>
+      <MultipleChoiceQnA qNum="15" question="מדוע קצב הפעילות הנמוך של האנזים המפרק טרהלוז בזן ב' מאפשר לו קצב התרבות גבוה יותר?" options={["פעילות נמוכה של האנזים המפרק גורמת להצטברות טרהלוז בתא, המגן עליו.","פעילות נמוכה חוסכת לתא אנרגיה רבה המנוצלת כולה לטובת חלוקת תאים.","האנזים המפרק הוא רעלן בעצמו, ולכן רמה נמוכה שלו מאפשרת חיים תקינים.","קצב פירוק נמוך מעיד על כך שהתא נמצא בתרדמה זמנית המגנה על השמרים."]} correctAnswerIndex={0} explanation="כאשר פעילות האנזים המפרק טרהלוז נמוכה יותר, כמות הטרהלוז שנשארת בתאי השמרים גדולה יותר. הטרהלוז מגן על תאי השמרים מפני נזקי האתנול, ולכן זן ב' מוגן יותר / עמיד יותר, וקצב ההתרבות שלו גדול משל זן א'." />
+      <MultipleChoiceQnA qNum="16" question="הסבירו כיצד הגנה על קרום התא בסביבה שיש בה אתנול מאפשרת לתאי השמרים לשמור על הומאוסטזיס." options={["הגנה על הקרום שומרת על בררנותו, מונעת חדירת רעלים ושומרת על סביבה יציבה.","על ידי הפיכת הקרום לאטום לחלוטין לכניסה של כל חומר חיצוני מהסביבה.","הקרום המוגן הופך למקור האנרגיה החלופי המועדף על השמרים בניסוי זה.","הגנה על הקרום מונעת פליטת פחמן דו-חמצני ובכך שומרת על רמת חומציות גבוהה."]} correctAnswerIndex={0} explanation="האתנול פוגע בקרום התא (בפוספוליפידים / בחלבונים). הגנה על קרום התא מאפשרת שמירה על בררנות הקרום ועל פעילות החלבונים. כך הסביבה הפנימית נשמרת שונה מהחיצונית ויש שמירה על מאזן מומסים (הומיאוסטזיס)." />
+    </div>
+  );
+};
+
+
+export default function App() {
+  return (
+    <div dir="rtl" className="rtl min-h-screen bg-stone-100 text-stone-900 font-sans p-2 sm:p-4 md:p-8">
+      <style>{customStyles}</style>
+      <div className="max-w-5xl mx-auto bg-white rounded-2xl md:rounded-3xl shadow-xl overflow-hidden border border-emerald-100">
+        <header className="bg-gradient-to-r from-emerald-800 via-teal-700 to-emerald-900 text-white p-6 md:p-10 text-center shadow-lg relative overflow-hidden text-right">
+          <h1 className="text-base sm:text-xl md:text-3xl lg:text-4xl font-extrabold mb-3 md:mb-4 drop-shadow-md relative z-10 whitespace-nowrap overflow-hidden text-ellipsis" style={{ fontFamily: "'Rubik', sans-serif" }}>מעבדה בביולוגיה: נשימה תאית בשמרים</h1>
+          <div className="mt-2 md:mt-3 text-xs sm:text-sm md:text-[15px] bg-white/20 inline-block px-4 py-1.5 md:px-5 md:py-2 rounded-full font-bold backdrop-blur-md border border-white/40 shadow-sm relative z-10 tracking-wide text-right">בגרות בביולוגיה 2023- בעיה 5</div>
+        </header>
+        <main className="p-4 sm:p-6 md:p-12 text-right overflow-hidden">
           <PartA />
           <PartB />
           <PartC />
         </main>
-
-        <footer className="bg-gradient-to-l from-stone-800 via-amber-800 to-orange-700 text-white/90 p-4 text-center text-xs md:text-sm shadow-inner">
-          כל הזכויות לתוכן הבחינה שמורות למשרד החינוך | נערך על ידי רבקה פרידלנד כהן
+        <footer className="bg-gradient-to-r from-emerald-800 via-teal-700 to-emerald-900 text-white p-4 md:p-6 text-center text-xs md:text-[15px] shadow-inner mt-4 md:mt-8">
+          <p>כל הזכויות לתוכן הבחינה שמורות למשרד החינוך נערכת על ידי רבקה פרידלנד כהן</p>
         </footer>
       </div>
     </div>
   );
-};
+}
 
-export default App;
+
+
