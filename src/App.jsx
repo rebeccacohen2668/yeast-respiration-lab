@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 
-
 // --- Custom CSS for Animations ---
 const customStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800&display=swap');
@@ -12,13 +11,11 @@ const customStyles = `
     100% { transform: translate(-50%, 80px) scale(0.5); opacity: 0; }
   }
 
-
   @keyframes disk-drop {
     0% { transform: translate(-50%, -10px); opacity: 1; }
     80% { transform: translate(-50%, 55px); opacity: 1; }
     100% { transform: translate(-50%, 75px); opacity: 0; }
   }
-
 
   .falling-drop {
     position: absolute;
@@ -52,7 +49,6 @@ const customStyles = `
     transition: all 0.4s ease-in-out;
   }
 
-
   .pipette-liquid {
     position: absolute;
     bottom: 2px;
@@ -62,12 +58,10 @@ const customStyles = `
     transition: height 0.4s ease-in-out;
   }
 
-
   .tube-liquid {
     width: 100%;
     transition: height 0.8s ease-in-out, background-color 0.8s ease-in-out;
   }
-
 
   .water-bath {
     background: linear-gradient(to bottom, rgba(14, 165, 233, 0.4), rgba(2, 132, 199, 0.7));
@@ -76,7 +70,6 @@ const customStyles = `
     border-radius: 0 0 20px 20px;
     backdrop-filter: blur(1px);
   }
-
 
   .straw {
     position: absolute;
@@ -89,7 +82,6 @@ const customStyles = `
     transition: all 0.3s ease-in-out;
   }
 
-
   .spoon {
     position: absolute;
     width: 75px;
@@ -100,28 +92,33 @@ const customStyles = `
   }
 `;
 
-
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-
 // --- Sub-Component: Classification Table ---
-const ClassificationTable = ({ qNum, question, rows, options, correctAnswers, explanation }) => {
+const ClassificationTable = ({ qNum, question, rows, options, correctAnswers, explanation, pointsPerRow, onScore }) => {
   const [selections, setSelections] = useState({});
   const [isSubmitted, setIsSubmitted] = useState(false);
-
 
   const handleSelect = (rowIdx, optIdx) => {
     if (!isSubmitted) setSelections({ ...selections, [rowIdx]: optIdx });
   };
 
-
   const isAllCorrect = rows.every((_, i) => selections[i] === correctAnswers[i]);
+  const totalPoints = rows.length * pointsPerRow;
 
+  const handleSubmit = () => {
+    setIsSubmitted(true);
+    let correctCount = 0;
+    rows.forEach((_, i) => {
+      if (selections[i] === correctAnswers[i]) correctCount++;
+    });
+    if (onScore) onScore(qNum, correctCount * pointsPerRow, totalPoints);
+  };
 
   return (
     <div className="border border-stone-200 rounded-lg p-4 md:p-6 mb-8 bg-white shadow-sm text-right">
       <div className="font-bold text-base md:text-lg mb-5 text-stone-800 leading-snug text-right">
-        שאלה {qNum}: <span className="font-normal">{question}</span>
+        שאלה {qNum} <span className="text-sm font-normal text-stone-500 mr-1">({totalPoints} נק')</span>: <span className="font-normal">{question}</span>
       </div>
       <div className="w-full mb-6 pb-2">
         <table className="w-full border-collapse border border-stone-300 text-[10px] sm:text-xs md:text-sm table-fixed">
@@ -161,7 +158,7 @@ const ClassificationTable = ({ qNum, question, rows, options, correctAnswers, ex
       </div>
       {!isSubmitted ? (
         <button 
-          onClick={() => Object.keys(selections).length === rows.length && setIsSubmitted(true)} 
+          onClick={() => Object.keys(selections).length === rows.length && handleSubmit()} 
           disabled={Object.keys(selections).length < rows.length}
           className="px-6 py-2 md:px-8 md:py-2.5 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 text-sm md:text-base"
         >
@@ -179,30 +176,29 @@ const ClassificationTable = ({ qNum, question, rows, options, correctAnswers, ex
   );
 };
 
-
 // --- Multiple Choice Question Component ---
-const MultipleChoiceQnA = ({ qNum, question, options, correctAnswerIndex, explanation }) => {
+const MultipleChoiceQnA = ({ qNum, question, options, correctAnswerIndex, explanation, points, onScore }) => {
   const [selectedOption, setSelectedOption] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
-
 
   const handleOptionSelect = (index) => {
     if (!isSubmitted) setSelectedOption(index);
   };
 
-
   const handleSubmit = () => {
-    if (selectedOption !== null) setIsSubmitted(true);
+    if (selectedOption !== null) {
+      setIsSubmitted(true);
+      const isCorrect = selectedOption === correctAnswerIndex;
+      if (onScore) onScore(qNum, isCorrect ? points : 0, points);
+    }
   };
 
-
   const isCorrect = selectedOption === correctAnswerIndex;
-
 
   return (
     <div className="border border-stone-200 rounded-lg p-4 md:p-6 mb-8 bg-white shadow-sm hover:shadow-md transition-shadow text-right">
       <div className="font-bold text-base md:text-lg mb-5 text-stone-800 leading-snug">
-        שאלה {qNum}: <span className="font-normal whitespace-pre-line">{question}</span>
+        שאלה {qNum} <span className="text-sm font-normal text-stone-500 mr-1">({points} נק')</span>: <span className="font-normal whitespace-pre-line">{question}</span>
       </div>
       <div className="flex flex-col gap-3 mb-5 text-right">
         {options.map((option, index) => {
@@ -252,18 +248,15 @@ const MultipleChoiceQnA = ({ qNum, question, options, correctAnswerIndex, explan
   );
 };
 
-
 // --- Part A: Initial Test ---
-const PartA = () => {
+const PartA = ({ onScore }) => {
   const [stage, setStage] = useState(0); 
   const [activeDrops, setActiveDrops] = useState({ a: [], b: [], c: [] });
   const [isAnimating, setIsAnimating] = useState({ a: false, b: false, c: false });
   const [isPink, setIsPink] = useState({ a: false, b: false, c: false });
   const [tableData, setTableData] = useState({ a: { baseI: '-', acidI: '-', colorI: '', baseII: '-' }, b: { baseI: '-', acidI: '-', colorI: '', baseII: '-' }, c: { baseI: '-', acidI: '-', colorI: '', baseII: '-' } });
 
-
   const isAnyAnimating = isAnimating.a || isAnimating.b || isAnimating.c;
-
 
   const triggerDrops = (config, onComplete) => {
     let maxCount = 0;
@@ -288,13 +281,11 @@ const PartA = () => {
     }, 500);
   };
 
-
   const resetPartA = () => {
     setStage(0); setActiveDrops({ a: [], b: [], c: [] });
     setIsAnimating({ a: false, b: false, c: false }); setIsPink({ a: false, b: false, c: false });
     setTableData({ a: { baseI: '-', acidI: '-', colorI: '', baseII: '-' }, b: { baseI: '-', acidI: '-', colorI: '', baseII: '-' }, c: { baseI: '-', acidI: '-', colorI: '', baseII: '-' } });
   };
-
 
   return (
     <div className="mb-16 text-right">
@@ -385,15 +376,14 @@ const PartA = () => {
           </table>
         </div>
       </div>
-      <MultipleChoiceQnA qNum="1" question="על פי התצפיות והטבלה, מהו צבע האינדיקטור פנול-פתלאין בסביבה בסיסית ובסביבה חומצית?" options={["בסביבה בסיסית הצבע ורוד ובסביבה חומצית הוא חסר צבע.","בסביבה בסיסית הצבע חסר צבע ובסביבה חומצית הוא ורוד.","בשתי הסביבות הצבע נשאר ורוד אך בעוצמות שונות לחלוטין.","בסביבה בסיסית הצבע כחול ובסביבה חומצית הוא צהוב בהיר."]} correctAnswerIndex={0} explanation="במבחנה א' (בסיס) הצבע הפך לוורוד. במבחנות ב' ו-ג' (חומצה) הצבע נותר שקוף." />
-      <MultipleChoiceQnA qNum="2" question="הסבירו מדוע במבחנה ג' נדרש מספר גדול יותר של טיפות בסיס (NaOH) מאשר במבחנה ב' בשלב II?" options={["מפני שבמבחנה ג' הוספו 3 טיפות חומצה, לעומת טיפה אחת בלבד במבחנה ב'.","מפני שבמבחנה ג' הוספו פחות מים ולכן ריכוז החומצה היה נמוך יותר.","מפני שהבסיס במבחנה ג' היה מרוכז יותר ולכן נדרשו יותר טיפות לסתירה.","מפני שהאינדיקטור פנול-פתלאין מתפרק מהר יותר בנוכחות חומצה HCl."]} correctAnswerIndex={0} explanation="הבסיס סותר את החומצה. ככל שיש יותר חומצה בתמיסה (3 טיפות לעומת 1), נדרשת כמות גדולה יותר של בסיס כדי לנטרול אותה." />
+      <MultipleChoiceQnA qNum="1" points={6} onScore={onScore} question="על פי התצפיות והטבלה, מהו צבע האינדיקטור פנול-פתלאין בסביבה בסיסית ובסביבה חומצית?" options={["בסביבה בסיסית הצבע ורוד ובסביבה חומצית הוא חסר צבע.","בסביבה בסיסית הצבע חסר צבע ובסביבה חומצית הוא ורוד.","בשתי הסביבות הצבע נשאר ורוד אך בעוצמות שונות לחלוטין.","בסביבה בסיסית הצבע כחול ובסביבה חומצית הוא צהוב בהיר."]} correctAnswerIndex={0} explanation="במבחנה א' (בסיס) הצבע הפך לוורוד. במבחנות ב' ו-ג' (חומצה) הצבע נותר שקוף." />
+      <MultipleChoiceQnA qNum="2" points={6} onScore={onScore} question="הסבירו מדוע במבחנה ג' נדרש מספר גדול יותר של טיפות בסיס (NaOH) מאשר במבחנה ב' בשלב II?" options={["מפני שבמבחנה ג' הוספו 3 טיפות חומצה, לעומת טיפה אחת בלבד במבחנה ב'.","מפני שבמבחנה ג' הוספו פחות מים ולכן ריכוז החומצה היה נמוך יותר.","מפני שהבסיס במבחנה ג' היה מרוכז יותר ולכן נדרשו יותר טיפות לסתירה.","מפני שהאינדיקטור פנול-פתלאין מתפרק מהר יותר בנוכחות חומצה HCl."]} correctAnswerIndex={0} explanation="הבסיס סותר את החומצה. ככל שיש יותר חומצה בתמיסה (3 טיפות לעומת 1), נדרשת כמות גדולה יותר של בסיס כדי לנטרול אותה." />
     </div>
   );
 };
 
-
 // --- Part B Component ---
-const PartB = () => {
+const PartB = ({ onScore }) => {
   const [isSeqAnimating, setIsSeqAnimating] = useState(false);
   const [prepStage, setPrepStage] = useState(0);
   const [prepTimer, setPrepTimer] = useState(0);
@@ -408,7 +398,6 @@ const PartB = () => {
   const [towelDisks, setTowelDisks] = useState([]);
   const [strawPos, setStrawPos] = useState({ right: 80, bottom: 250, visible: false });
 
-
   const [titrStage, setTitrStage] = useState(0);
   const [titrLiquidHeight, setTitrLiquidHeight] = useState({ a: '0%', b: '0%', c: '0%', d: '0%' });
   const [titrPink, setTitrPink] = useState({ a: false, b: false, c: false, d: false });
@@ -416,9 +405,7 @@ const PartB = () => {
   const [titrTable, setTitrTable] = useState([{id:'A1',transfer:'-',ind:'-',base:'-'},{id:'B1',transfer:'-',ind:'-',base:'-'},{id:'C1',transfer:'-',ind:'-',base:'-'},{id:'D1',transfer:'-',ind:'-',base:'-'}]);
   const [titrPipette, setTitrPipette] = useState({ visible: false, tubeId: null, dropping: false, type: 'mixed' });
 
-
   const isAnyAnimating = isSeqAnimating;
-
 
   const runPrepStep1 = async () => { 
     setIsSeqAnimating(true); setPrepStage(1); 
@@ -438,7 +425,6 @@ const PartB = () => {
     setIsSeqAnimating(false); 
   };
 
-
   const runPrepStep2 = async () => {
     setIsSeqAnimating(true); setPrepStage(2);
     const addLiq = async (idx, type, h, val, prop) => {
@@ -451,7 +437,6 @@ const PartB = () => {
     await addLiq(0, 'water', 25, '5', 'water'); await addLiq(1, 'water', 40, '9', 'water'); await addLiq(2, 'water', 40, '9', 'water'); await addLiq(3, 'ethanol', 25, '4.5', 'eth');
     setPipetteState({ tubeId: null, y: -60, type: 'water', liquidHeight: '0%', dropping: false }); setIsSeqAnimating(false);
   };
-
 
   const runPrepStep3 = async () => {
     setIsSeqAnimating(true); setPrepStage(3); setPrepTimer(0);
@@ -467,7 +452,6 @@ const PartB = () => {
     for(let i=1; i<=6; i++) { setPrepTimer(i); if(i===6) setPrepTable(p => p.map(row => ({...row, time: '6 דק\''}))); await wait(600); }
     setIsSeqAnimating(false);
   };
-
 
   const runPrepStep4 = async () => {
     setIsSeqAnimating(true); setPrepStage(4); setTubesY(0); 
@@ -549,7 +533,6 @@ const PartB = () => {
     });
   };
 
-
   const resetPartB = () => { 
     setPrepStage(0); setPrepTimer(0); setTubesY(0); setShowWaste(false); setWasteHeight('5%'); setTitrStage(0);
     setTubesData([{id:1,water:0,eth:0,gluc:0,disks:0,stopper:false},{id:2,water:0,eth:0,gluc:0,disks:0,stopper:false},{id:3,water:0,eth:0,gluc:0,disks:0,stopper:false},{id:4,water:0,eth:0,gluc:0,disks:0,stopper:false}]); 
@@ -558,19 +541,16 @@ const PartB = () => {
     setTitrTable([{id:'A1',transfer:'-',ind:'-',base:'-'},{id:'B1',transfer:'-',ind:'-',base:'-'},{id:'C1',transfer:'-',ind:'-',base:'-'},{id:'D1',transfer:'-',ind:'-',base:'-'}]); 
   };
 
-
   return (
     <div className="mb-14 text-right">
       <div className="flex items-center gap-3 mb-6 border-b-2 border-emerald-200 pb-3">
         <h2 className="text-xl md:text-2xl font-bold text-emerald-900">חלק ב' - ניסוי: השפעת אתנול וגלוקוז על קצב תהליך הנשימה התאית בשמרים</h2>
       </div>
 
-
       <div className="bg-amber-50/80 p-4 md:p-6 rounded-2xl mb-6 border border-amber-200 shadow-sm leading-relaxed text-stone-800 text-right">
         <h3 className="font-bold text-amber-900 mb-1 text-sm md:text-base">לידיעתכם:</h3>
         <p className="text-sm md:text-[15px]">אתנול הוא חומר הממס שומנים ופוגע במבנה המרחבי של חלבונים. פחמן דו-חמצני (CO2) הנוצר בנשימה תאית מגיב עם מים ויוצר חומצה.</p>
       </div>
-
 
       <div className="bg-emerald-50/70 p-4 md:p-6 rounded-2xl mb-8 border border-emerald-100 shadow-sm text-stone-800 leading-relaxed text-right">
         <h3 className="font-bold text-emerald-900 mb-2 text-base md:text-lg">📋 שלב ב1: הכנת דסקיות שמרים מקובעים באגר, הכנת התמיסות והדגרה</h3>
@@ -579,7 +559,6 @@ const PartB = () => {
         </p>
         <p className="text-emerald-800 font-bold text-right text-sm md:text-base mt-2">הפעילו את שלבי האנימציה ועקבו אחר תהליך ההכנה בטבלה:</p>
       </div>
-
 
       <div className="bg-white border-2 border-stone-100 p-3 md:p-5 rounded-2xl mb-8 shadow-sm relative overflow-hidden text-right">
         <div className="grid grid-cols-2 md:flex md:flex-wrap justify-center gap-2 mb-2 relative z-20 bg-stone-50 p-2 md:p-3 rounded-xl border border-stone-200">
@@ -631,7 +610,6 @@ const PartB = () => {
             </div>
           )}
 
-
           <div className="w-full flex justify-center scale-75 sm:scale-90 md:scale-100 origin-bottom">
             <div className="flex gap-4 md:gap-8 relative z-10 transition-transform duration-1000" style={{ transform: `translateY(${tubesY}px)`, opacity: prepStage>=2?1:0 }}>
               {tubesData.map((t, i) => (
@@ -669,7 +647,6 @@ const PartB = () => {
           </div>
         </div>
 
-
         <div className="w-full text-right mt-2 md:mt-3">
           <table className="w-full text-center border-collapse bg-white border border-stone-300 text-[10px] sm:text-xs md:text-[15px] shadow-sm table-fixed">
             <thead className="bg-stone-100 border-b-2 border-stone-300">
@@ -698,7 +675,6 @@ const PartB = () => {
         </div>
       </div>
 
-
       <div className="bg-emerald-50/70 p-4 md:p-6 rounded-2xl mb-8 border border-emerald-100 shadow-sm mt-8 text-stone-800 leading-relaxed text-right">
         <h3 className="font-bold text-emerald-900 mb-3 text-base md:text-lg">📋 שלב ב2: בדיקת הכמות היחסית של חומצה בכל אחת מן המבחנות D-A</h3>
         <p className="text-sm md:text-[16px] mb-2">
@@ -706,7 +682,6 @@ const PartB = () => {
         </p>
         <p className="text-emerald-800 font-bold text-sm md:text-base mt-2">הפעילו את שלבי הטיטרציה באנימציה ועקבו אחר ההנחיות המופיעות בה:</p>
       </div>
-
 
       <div className="bg-white border-2 border-stone-100 p-3 md:p-5 rounded-2xl mb-12 shadow-sm relative overflow-hidden text-right">
         <div className="grid grid-cols-2 md:flex md:flex-wrap justify-center gap-2 mb-2 bg-stone-50 p-2 md:p-3 rounded-xl border border-stone-200">
@@ -743,7 +718,6 @@ const PartB = () => {
           </div>
         </div>
 
-
         <div className="w-full mt-2 md:mt-3 text-right">
           <table className="w-full text-center border-collapse bg-white shadow-sm border border-stone-300 text-[10px] sm:text-xs md:text-[15px] text-stone-700 font-bold table-fixed">
             <thead className="bg-stone-100 border-b-2 border-stone-300">
@@ -768,19 +742,21 @@ const PartB = () => {
         </div>
       </div>
 
-
       {/* Part B Questions Section */}
       <MultipleChoiceQnA 
         qNum="3" 
+        points={6} 
+        onScore={onScore}
         question="חשבו את ריכוזי הגלוקוז במבחנות 1-3 על פי הנתונים הבאים: מבחנה 1 קיבלה 5 מ''ל גלוקוז בריכוז 0.5M ו-5 מ''ל מים. מבחנה 2 קיבלה 1 מ''ל מהתמיסה של מבחנה 1 ו-9 מ''ל מים. מבחנה 3 קיבלה 1 מ''ל ממבחנה 2 ו-9 מ''ל מים." 
         options={["במבחנה 1 הריכוז הוא 0.25M, במבחנה 2 הריכוז הוא 0.025M ובמבחנה 3 הריכוז הוא 0.0025M.", "במבחנה 1 הריכוז הוא 0.10M, במבחנה 2 הריכוז הוא 0.010M ובמבחנה 3 הריכוז הוא 0.0010M.", "במבחנה 1 הריכוז הוא 0.50M, במבחנה 2 הריכוז הוא 0.250M ובמבחנה 3 הריכוז הוא 0.1250M.", "במבחנה 1 הריכוז הוא 0.25M, במבחנה 2 הריכוז הוא 0.125M ובמבחנה 3 הריכוז הוא 0.0625M."]} 
         correctAnswerIndex={0} 
         explanation="במבחנה 1: הוסיפו 5 מ''ל תמיסת גלוקוז (0.5M) ל-5 מ''ל מים, התמיסה נמהלה פי 2 ולכן הריכוז ירד פי 2 (0.25M). במבחנה 2: הוסיפו 1 מ''ל מהתמיסה ל-9 מ''ל מים, התמיסה נמהלה פי 10 ולכן הריכוז ירד פי 10 (0.025M). במבחנה 3 נמהלה התמיסה פי 10 נוספים (0.0025M)." 
       />
 
-
       <ClassificationTable 
         qNum="4"
+        pointsPerRow={2}
+        onScore={onScore}
         question="לפניכם ארבעה מִבֵּין רכיבי הניסוי שערכתם בחלק ב. סווגו כל רכיב לתפקידו המתאים:"
         rows={["מספר טיפות הבסיס NaOH שנדרשו לשינוי צבע התמיסה","קצב הנשימה התאית בשמרים מקובעים באגר","טמפרטורת המים באמבט","מספר הטיפות של פנול-פתלאין"]}
         options={["גורם קבוע", "משתנה תלוי", "דרך המדידה"]}
@@ -788,25 +764,22 @@ const PartB = () => {
         explanation="קצב הנשימה התאית הוא משתנה תלוי. מספר טיפות הבסיס (NaOH) שנדרשו לשינוי צבע התמיסה הוא דרך המדידה של המשתנה התלוי. טמפרטורת המים באמבט ומספר הטיפות של פנול-פתלאין הם גורמים קבועים."
       />
 
-
-      <MultipleChoiceQnA qNum="5" question="הימצאות אתנול במבחנות היא משתנה בלתי תלוי אחד בניסוי שערכתם. מהו המשתנה הבלתי תלוי האחר בניסוי שערכתם?" options={["ריכוז הגלוקוז בתמיסה שבתוך כל מבחנה.","קצב פליטת הפחמן הדו-חמצני במהלך הנשימה.","מספר דסקיות השמרים המקובעות בתוך האגר.","טמפרטורת אמבט המים במהלך שלב ההדגרה."]} correctAnswerIndex={0} explanation="המשתנה הבלתי תלוי האחר בניסוי הוא ריכוז הגלוקוז בתמיסות שבהן שרו השמרים." />
-      <MultipleChoiceQnA qNum="6" question="מדוע חשוב שדווקא מספר דסקיות שמרים (8 דסקיות) יהיה גורם קבוע בניסוי שערכתם?" options={["כיוון שכמות השמרים משפיעה על קצב הנשימה ופליטת ה-CO2.","כדי להבטיח שלכל השמרים תהיה גישה שווה לחמצן באוויר.","כדי שהמיהולים של הגלוקוז יישארו מדויקים לאורך זמן הניסוי.","כדי שדסקיות האגר לא יתפרקו עקב כמות גדולה של תוצרי לוואי."]} correctAnswerIndex={0} explanation="כמות השמרים (התאים / האנזימים) משפיעה על קצב תהליך הנשימה התאית. בניסוי נבדקה ההשפעה של משתנה בלתי תלוי אחר (ריכוז גלוקוז והימצאות אתנול), ולכן כל שאר הגורמים צריכים להישמר קבועים." />
-      <MultipleChoiceQnA qNum="7" question="הציעו הסבר לתוצאות הניסוי שהתקבלו במבחנות C-A (הקשר בין גלוקוז לטיטרציה):" options={["ככל שריכוז הגלוקוז גבוה, נוצר יותר CO2 שיוצר חומצה המצריכה בסיס.","ריכוז גלוקוז נמוך מזרז את נשימת השמרים ולכן מצריך יותר בסיס.","הגלוקוז הוא בסיסי וסותר את החומצה הפחמתית הנוצרת במים.","אין קשר ישיר בין ריכוז הגלוקוז במבחנות לבין כמות החומצה שנמדדה."]} correctAnswerIndex={0} explanation="הגלוקוז הוא מגיב / מצע / סובסטרט בתהליך הנשימה התאית. ככל שריכוז הגלוקוז גבוה יותר, קצב תהליך הנשימה גבוה יותר. כתוצאה מכך נוצר יותר CO2 ונוצרת יותר חומצה פחמתית, ולכן נדרש מספר גדול יותר של טיפות בסיס לנטרול החומצה (עד לקבלת צבע ורוד)." />
-      <MultipleChoiceQnA qNum="8" question="הציעו הסבר להבדל בין התוצאה שקיבלתם במבחנה D לתוצאה במבחנה A:" options={["אתנול הוא חומר הממס שומנים ופוגע בחלבונים, מה שמעכב את הנשימה.","האתנול מזרז את נשימת השמרים וגורם ליצירה מוגברת מאוד של פד''ח.","האתנול מגיב עם פנול-פתלאין ומשנה את צבעו מראש ללא קשר ל-pH.","ריכוז הגלוקוז במבחנה D1 היה נמוך משמעותית מריכוז הגלוקוז במבחנה A1."]} correctAnswerIndex={0} explanation="במבחנה D קיים אתנול בניגוד למבחנה A. האתנול פוגע בקרומי תאי השמרים, בחלבונים ובאנזימי הנשימה, ולכן קצב תהליך הנשימה התאית איטי יותר. כתוצאה מכך נוצר פחות CO2 ופחות חומצה, ולכן נדרש מספר קטן יותר של טיפות בסיס לנטרול החומצה." />
-      <MultipleChoiceQnA qNum="9" question="מהי החשיבות של הוספת מבחנת בקרה המכילה מים ודסקיות שמרים בלבד (ללא גלוקוז)?" options={["כדי לוודא שהשינוי בחומציות נובע רק מפירוק הגלוקוז בתהליך הנשימה.","לבדיקת עמידות הדסקיות לאורך זמן בטמפרטורה הגבוהה של האמבט.","כדי להשוות את קצב ייצור האתנול הפנימי של השמרים ללא סוכר חיצוני.","כדי להוכיח שהאגר אינו מתפרק במים ומפריש חומרים בסיסיים למבחנה."]} correctAnswerIndex={0} explanation="הבקרה נועדה לשלול הסבר חלופי שעל פיו שינוי ה-pH מתרחש עקב תהליך אחר שאינו קשור להשפעת גלוקוז על קצב הנשימה התאית, וכן כדי לוודא שללא גלוקוז אין בשמרים תהליך שגורם לשינוי חומציות/בסיסיות התמיסה." />
-      <MultipleChoiceQnA qNum="10" question="תלמידים טענו שהשפעת האתנול על קצב נשימה תאית תהיה דומה בכל היצורים החיים. האם טענתם נכונה?" options={["כן, כי מבנה קרום התא והאנזימים דומה בבסיסו בכל היצורים החיים.","לא, כי רק יצורים חד-תאיים כמו שמרים נפגעים מממיסים אורגניים.","כן, כי אתנול הוא מקור אנרגיה חיובי עבור כל סוגי התאים בטבע.","לא, כי חדירות האתנול לתאים של יונקים נמוכה בהרבה מלתאי שמרים."]} correctAnswerIndex={0} explanation="כן. לכל התאים יש חלבונים וקרומים. האתנול פוגע בחלבונים ובקרומי תאים, ולכן השפעת האתנול צפויה להיות דומה בכל היצורים." />
+      <MultipleChoiceQnA qNum="5" points={6} onScore={onScore} question="הימצאות אתנול במבחנות היא משתנה בלתי תלוי אחד בניסוי שערכתם. מהו המשתנה הבלתי תלוי האחר בניסוי שערכתם?" options={["ריכוז הגלוקוז בתמיסה שבתוך כל מבחנה.","קצב פליטת הפחמן הדו-חמצני במהלך הנשימה.","מספר דסקיות השמרים המקובעות בתוך האגר.","טמפרטורת אמבט המים במהלך שלב ההדגרה."]} correctAnswerIndex={0} explanation="המשתנה הבלתי תלוי האחר בניסוי הוא ריכוז הגלוקוז בתמיסות שבהן שרו השמרים." />
+      <MultipleChoiceQnA qNum="6" points={6} onScore={onScore} question="מדוע חשוב שדווקא מספר דסקיות שמרים (8 דסקיות) יהיה גורם קבוע בניסוי שערכתם?" options={["כיוון שכמות השמרים משפיעה על קצב הנשימה ופליטת ה-CO2.","כדי להבטיח שלכל השמרים תהיה גישה שווה לחמצן באוויר.","כדי שהמיהולים של הגלוקוז יישארו מדויקים לאורך זמן הניסוי.","כדי שדסקיות האגר לא יתפרקו עקב כמות גדולה של תוצרי לוואי."]} correctAnswerIndex={0} explanation="כמות השמרים (התאים / האנזימים) משפיעה על קצב תהליך הנשימה התאית. בניסוי נבדקה ההשפעה של משתנה בלתי תלוי אחר (ריכוז גלוקוז והימצאות אתנול), ולכן כל שאר הגורמים צריכים להישמר קבועים." />
+      <MultipleChoiceQnA qNum="7" points={8} onScore={onScore} question="הציעו הסבר לתוצאות הניסוי שהתקבלו במבחנות C-A (הקשר בין גלוקוז לטיטרציה):" options={["ככל שריכוז הגלוקוז גבוה, נוצר יותר CO2 שיוצר חומצה המצריכה בסיס.","ריכוז גלוקוז נמוך מזרז את נשימת השמרים ולכן מצריך יותר בסיס.","הגלוקוז הוא בסיסי וסותר את החומצה הפחמתית הנוצרת במים.","אין קשר ישיר בין ריכוז הגלוקוז במבחנות לבין כמות החומצה שנמדדה."]} correctAnswerIndex={0} explanation="הגלוקוז הוא מגיב / מצע / סובסטרט בתהליך הנשימה התאית. ככל שריכוז הגלוקוז גבוה יותר, קצב תהליך הנשימה גבוה יותר. כתוצאה מכך נוצר יותר CO2 ונוצרת יותר חומצה פחמתית, ולכן נדרש מספר גדול יותר של טיפות בסיס לנטרול החומצה (עד לקבלת צבע ורוד)." />
+      <MultipleChoiceQnA qNum="8" points={8} onScore={onScore} question="הציעו הסבר להבדל בין התוצאה שקיבלתם במבחנה D לתוצאה במבחנה A:" options={["אתנול הוא חומר הממס שומנים ופוגע בחלבונים, מה שמעכב את הנשימה.","האתנול מזרז את נשימת השמרים וגורם ליצירה מוגברת מאוד של פד''ח.","האתנול מגיב עם פנול-פתלאין ומשנה את צבעו מראש ללא קשר ל-pH.","ריכוז הגלוקוז במבחנה D1 היה נמוך משמעותית מריכוז הגלוקוז במבחנה A1."]} correctAnswerIndex={0} explanation="במבחנה D קיים אתנול בניגוד למבחנה A. האתנול פוגע בקרומי תאי השמרים, בחלבונים ובאנזימי הנשימה, ולכן קצב תהליך הנשימה התאית איטי יותר. כתוצאה מכך נוצר פחות CO2 ופחות חומצה, ולכן נדרש מספר קטן יותר של טיפות בסיס לנטרול החומצה." />
+      <MultipleChoiceQnA qNum="9" points={6} onScore={onScore} question="מהי החשיבות של הוספת מבחנת בקרה המכילה מים ודסקיות שמרים בלבד (ללא גלוקוז)?" options={["כדי לוודא שהשינוי בחומציות נובע רק מפירוק הגלוקוז בתהליך הנשימה.","לבדיקת עמידות הדסקיות לאורך זמן בטמפרטורה הגבוהה של האמבט.","כדי להשוות את קצב ייצור האתנול הפנימי של השמרים ללא סוכר חיצוני.","כדי להוכיח שהאגר אינו מתפרק במים ומפריש חומרים בסיסיים למבחנה."]} correctAnswerIndex={0} explanation="הבקרה נועדה לשלול הסבר חלופי שעל פיו שינוי ה-pH מתרחש עקב תהליך אחר שאינו קשור להשפעת גלוקוז על קצב הנשימה התאית, וכן כדי לוודא שללא גלוקוז אין בשמרים תהליך שגורם לשינוי חומציות/בסיסיות התמיסה." />
+      <MultipleChoiceQnA qNum="10" points={6} onScore={onScore} question="תלמידים טענו שהשפעת האתנול על קצב נשימה תאית תהיה דומה בכל היצורים החיים. האם טענתם נכונה?" options={["כן, כי מבנה קרום התא והאנזימים דומה בבסיסו בכל היצורים החיים.","לא, כי רק יצורים חד-תאיים כמו שמרים נפגעים מממיסים אורגניים.","כן, כי אתנול הוא מקור אנרגיה חיובי עבור כל סוגי התאים בטבע.","לא, כי חדירות האתנול לתאים של יונקים נמוכה בהרבה מלתאי שמרים."]} correctAnswerIndex={0} explanation="כן. לכל התאים יש חלבונים וקרומים. האתנול פוגע בחלבונים ובקרומי תאים, ולכן השפעת האתנול צפויה להיות דומה בכל היצורים." />
     </div>
   );
 };
 
-
-const PartC = () => {
+const PartC = ({ onScore }) => {
   return (
     <div className="mb-12 text-right">
       <div className="flex items-center gap-3 mb-6 border-b-2 border-emerald-200 pb-3 text-right">
         <h2 className="text-xl md:text-2xl font-bold text-emerald-900 text-right text-stone-900">חלק ג' - ניתוח תוצאות מחקר: השפעת ריכוז אתנול על התרבות שמרים</h2>
       </div>
-
 
       <div className="bg-emerald-50/70 p-4 md:p-6 rounded-2xl mb-8 border border-emerald-100 shadow-sm text-stone-800 leading-relaxed text-right">
         <p className="mb-4 text-sm md:text-[15px]">אתנול הוא אחד התוצרים של תהליך התסיסה שמתרחש בשמרים. לאתנול יש ערך רב בתעשיית היין, הוא משמש דלק ביולוגי, חומר חיטוי ועוד.</p>
@@ -815,7 +788,6 @@ const PartC = () => {
         <h3 className="font-bold text-emerald-900 mb-2 text-right text-sm md:text-base">ניסוי 1</h3>
         <p className="mb-4 text-sm md:text-[15px]">חוקרים הוסיפו אתנול בריכוזים שונים לתמיסת גידול ובה שמרים. הם בדקו את קצב ההתרבות של שני זני שמרים במשך 48 שעות. בטבלה 3 שלפניכם נתונים על קצב ההתרבות של השמרים בתמיסות שבהן אתנול בריכוזים שונים.</p>
       </div>
-
 
       <div className="bg-white p-4 md:p-8 border-2 border-stone-100 rounded-2xl shadow-sm mb-10 flex flex-col items-center text-right">
         <h4 className="font-bold text-center mb-6 text-emerald-900 text-sm md:text-base bg-emerald-50 w-full py-3 rounded-lg px-2 md:pr-4 text-right">טבלה 3: קצב התרבות השמרים כתלות בריכוז אתנול</h4>
@@ -834,11 +806,9 @@ const PartC = () => {
         </div>
       </div>
 
-
-      <MultipleChoiceQnA qNum="11" question="איזה סוג של הצגה גרפית הוא המתאים ביותר לתיאור התוצאות המוצגות בטבלה 3?" options={["גרף רציף (קו), כיוון שריכוז האתנול הוא משתנה כמותי רציף.","דיאגרמת עמודות, כיוון שההשוואה בין הזנים השונים היא המטרה העיקרית.","דיאגרמת עוגה, המראה את החלק היחסי של כל זן בכל מדידה.","גרף נקודות מפוזר, כיוון שאין קשר ישיר בין המדידות בטבלה."]} correctAnswerIndex={0} explanation="ההצגה הגרפית המתאימה היא גרף רציף (עקום). הנימוק לכך הוא שהמשתנה הבלתי תלוי (ריכוז אתנול) הוא משתנה רציף / כמותי / מדיד, ויש משמעות לערכי הביניים." />
-      <MultipleChoiceQnA qNum="12" question="תארו את התוצאות של ניסוי 1 כפי שהן משתקפות בנתוני טבלה 3." options={["ככל שריכוז האתנול עולה, חלה ירידה הדרגתית בקצב ההתרבות בשני הזנים.","קצב ההתרבות עולה עם עליית ריכוז האתנול עד לשיא מסוים ואז יורד.","ריכוז האתנול אינו משפיע על זן ב', אך גורם למותם של כל תאי זן א'.","זן א' מתרבה מהר יותר מזן ב' ככל שריכוז האתנול בתמיסה עולה."]} correctAnswerIndex={0} explanation="בטווח ריכוזי אתנול 0-4% אין כמעט שינוי בקצב ההתרבות של שני הזנים. ככל שריכוז האתנול גבוה יותר (מ-4% עד 16%), קצב ההתרבות של שני הזנים יורד. קצב ההתרבות של זן ב' יורד לאט יותר בהשוואה לזן א' ולכן הוא גבוה יותר." />
-      <MultipleChoiceQnA qNum="13" question="קבעו איזה משני הזנים - זן א או זן ב - עמיד יותר להשפעות האתנול. נמקו." options={["זן ב', כיוון שקצב ההתרבות שלו נותר גבוה יותר בהשוואה לזן א' בכל ריכוז.","זן א', כי הוא רגיש יותר ומגיב מהר אח יותר לשינויי ריכוז בסביבה.","שניהם עמידים באותה מידה בטווח הריכוזים של 0-4% אתנול.","לא ניתן לקבוע זאת בוודאות על פי הנתונים המוגבלים המופיעים בטבלה."]} correctAnswerIndex={0} explanation="זן ב' עמיד יותר להשפעות האתנול. הנימוק מהגרף: ניתן לראות שככל שמעלים את ריכוז האתנול, קצב ההתרבות של זן ב' גבוה יותר בהשוואה לזן א'. כמו כן, בריכוז הגבוה ביותר (16%) זן ב' ממשיך להתרבות בעוד זן א' אינו מתרבה כלל." />
-
+      <MultipleChoiceQnA qNum="11" points={6} onScore={onScore} question="איזה סוג של הצגה גרפית הוא המתאים ביותר לתיאור התוצאות המוצגות בטבלה 3?" options={["גרף רציף (קו), כיוון שריכוז האתנול הוא משתנה כמותי רציף.","דיאגרמת עמודות, כיוון שההשוואה בין הזנים השונים היא המטרה העיקרית.","דיאגרמת עוגה, המראה את החלק היחסי של כל זן בכל מדידה.","גרף נקודות מפוזר, כיוון שאין קשר ישיר בין המדידות בטבלה."]} correctAnswerIndex={0} explanation="ההצגה הגרפית המתאימה היא גרף רציף (עקום). הנימוק לכך הוא שהמשתנה הבלתי תלוי (ריכוז אתנול) הוא משתנה רציף / כמותי / מדיד, ויש משמעות לערכי הביניים." />
+      <MultipleChoiceQnA qNum="12" points={7} onScore={onScore} question="תארו את התוצאות של ניסוי 1 כפי שהן משתקפות בנתוני טבלה 3." options={["ככל שריכוז האתנול עולה, חלה ירידה הדרגתית בקצב ההתרבות בשני הזנים.","קצב ההתרבות עולה עם עליית ריכוז האתנול עד לשיא מסוים ואז יורד.","ריכוז האתנול אינו משפיע על זן ב', אך גורם למותם של כל תאי זן א'.","זן א' מתרבה מהר יותר מזן ב' ככל שריכוז האתנול בתמיסה עולה."]} correctAnswerIndex={0} explanation="בטווח ריכוזי אתנול 0-4% אין כמעט שינוי בקצב ההתרבות של שני הזנים. ככל שריכוז האתנול גבוה יותר (מ-4% עד 16%), קצב ההתרבות של שני הזנים יורד. קצב ההתרבות של זן ב' יורד לאט יותר בהשוואה לזן א' ולכן הוא גבוה יותר." />
+      <MultipleChoiceQnA qNum="13" points={7} onScore={onScore} question="קבעו איזה משני הזנים - זן א או זן ב - עמיד יותר להשפעות האתנול. נמקו." options={["זן ב', כיוון שקצב ההתרבות שלו נותר גבוה יותר בהשוואה לזן א' בכל ריכוז.","זן א', כי הוא רגיש יותר ומגיב מהר יותר לשינויי ריכוז בסביבה.","שניהם עמידים באותה מידה בטווח הריכוזים של 0-4% אתנול.","לא ניתן לקבוע זאת בוודאות על פי הנתונים המוגבלים המופיעים בטבלה."]} correctAnswerIndex={0} explanation="זן ב' עמיד יותר להשפעות האתנול. הנימוק מהגרף: ניתן לראות שככל שמעלים את ריכוז האתנול, קצב ההתרבות של זן ב' גבוה יותר בהשוואה לזן א'. כמו כן, בריכוז הגבוה ביותר (16%) זן ב' ממשיך להתרבות בעוד זן א' אינו מתרבה כלל." />
 
       <div className="bg-emerald-50/70 p-4 md:p-6 rounded-2xl mb-8 border border-emerald-100 shadow-sm mt-12 text-stone-800 leading-relaxed text-right">
         <h3 className="font-bold text-emerald-900 mb-2 text-right text-sm md:text-base">ניסוי 2</h3>
@@ -867,38 +837,99 @@ const PartC = () => {
         </div>
       </div>
       
-      <MultipleChoiceQnA qNum="14" question="על פי גרף 2 והמידע על סוכר הטרהלוז, מהוא ההסבר לתוצאות של זן ב בטבלה 1?" options={["זן ב' שומר על ריכוז טרהלוז גבוה יותר בכל הריכוזים, המגן על תאיו.","זן ב' מייצר פחות טרהלוז כדי לחסוך באנרגיה הדרושה להתמודדות עם האתנול.","הטרהלוז בזן ב' הופך לחומר רעיל בסביבת אתנול, מה שמזרז את ההתרבות.","אין קשר סיבתי מוכח בין רמת הטרהלוז בתא לבין קצב ההתרבות שנמדד."]} correctAnswerIndex={0} explanation="על פי הגרף, בזן ב' יש יותר טרהלוז ככל שריכוזי האתנול גבוהים יותר. טרהלוז מגן מפני השפעת האתנול, ולכן קצב ההתרבות של זן ב' גבוה יותר בהשוואה לזן א'." />
+      <MultipleChoiceQnA qNum="14" points={6} onScore={onScore} question="על פי גרף 2 והמידע על סוכר הטרהלוז, מהוא ההסבר לתוצאות של זן ב בטבלה 1?" options={["זן ב' שומר על ריכוז טרהלוז גבוה יותר בכל הריכוזים, המגן על תאיו.","זן ב' מייצר פחות טרהלוז כדי לחסוך באנרגיה הדרושה להתמודדות עם האתנול.","הטרהלוז בזן ב' הופך לחומר רעיל בסביבת אתנול, מה שמזרז את ההתרבות.","אין קשר סיבתי מוכח בין רמת הטרהלוז בתא לבין קצב ההתרבות שנמדד."]} correctAnswerIndex={0} explanation="על פי הגרף, בזן ב' יש יותר טרהלוז ככל שריכוזי האתנול גבוהים יותר. טרהלוז מגן מפני השפעת האתנול, ולכן קצב ההתרבות של זן ב' גבוה יותר בהשוואה לזן א'." />
       <div className="bg-emerald-50/70 p-4 md:p-6 rounded-2xl mb-8 border border-emerald-100 shadow-sm text-right mt-12 text-stone-800 leading-relaxed text-right">
         <p className="mb-4 text-sm md:text-[15px]">בתאי השמרים יש אנזים שמזרז בנייה של הסוכר טרהלוז מחד־סוכרים, ויש אנזים אחר שמזרז פירוק של טרהלוז לחד־סוכרים. נמצא כי בתמיסה שבה ריכוז אתנול הוא 10%, קצב הפעילות של האנזים המזרז פירוק טרהלוז בזן ב נמוך בהשוואה לזן א, וקצב ההתרבות של זן ב גבוה יותר.</p>
       </div>
-      <MultipleChoiceQnA qNum="15" question="מדוע קצב הפעילות הנמוך של האנזים המפרק טרהלוז בזן ב' מאפשר לו קצב התרבות גבוה יותר?" options={["פעילות נמוכה של האנזים המפרק גורמת להצטברות טרהלוז בתא, המגן עליו.","פעילות נמוכה חוסכת לתא אנרגיה רבה המנוצלת כולה לטובת חלוקת תאים.","האנזים המפרק הוא רעלן בעצמו, ולכן רמה נמוכה שלו מאפשרת חיים תקינים.","קצב פירוק נמוך מעיד על כך שהתא נמצא בתרדמה זמנית המגנה על השמרים."]} correctAnswerIndex={0} explanation="כאשר פעילות האנזים המפרק טרהלוז נמוכה יותר, כמות הטרהלוז שנשארת בתאי השמרים גדולה יותר. הטרהלוז מגן על תאי השמרים מפני נזקי האתנול, ולכן זן ב' מוגן יותר / עמיד יותר, וקצב ההתרבות שלו גדול משל זן א'." />
-      <MultipleChoiceQnA qNum="16" question="הסבירו כיצד הגנה על קרום התא בסביבה שיש בה אתנול מאפשרת לתאי השמרים לשמור על הומאוסטזיס." options={["הגנה על הקרום שומרת על בררנותו, מונעת חדירת רעלים ושומרת על סביבה יציבה.","על ידי הפיכת הקרום לאטום לחלוטין לכניסה של כל חומר חיצוני מהסביבה.","הקרום המוגן הופך למקור האנרגיה החלופי המועדף על השמרים בניסוי זה.","הגנה על הקרום מונעת פליטת פחמן דו-חמצני ובכך שומרת על רמת חומציות גבוהה."]} correctAnswerIndex={0} explanation="האתנול פוגע בקרום התא (בפוספוליפידים / בחלבונים). הגנה על קרום התא מאפשרת שמירה על בררנות הקרום ועל פעילות החלבונים. כך הסביבה הפנימית נשמרת שונה מהחיצונית ויש שמירה על מאזן מומסים (הומיאוסטזיס)." />
+      <MultipleChoiceQnA qNum="15" points={6} onScore={onScore} question="מדוע קצב הפעילות הנמוך של האנזים המפרק טרהלוז בזן ב' מאפשר לו קצב התרבות גבוה יותר?" options={["פעילות נמוכה של האנזים המפרק גורמת להצטברות טרהלוז בתא, המגן עליו.","פעילות נמוכה חוסכת לתא אנרגיה רבה המנוצלת כולה לטובת חלוקת תאים.","האנזים המפרק הוא רעלן בעצמו, ולכן רמה נמוכה שלו מאפשרת חיים תקינים.","קצב פירוק נמוך מעיד על כך שהתא נמצא בתרדמה זמנית המגנה על השמרים."]} correctAnswerIndex={0} explanation="כאשר פעילות האנזים המפרק טרהלוז נמוכה יותר, כמות הטרהלוז שנשארת בתאי השמרים גדולה יותר. הטרהלוז מגן על תאי השמרים מפני נזקי האתנול, ולכן זן ב' מוגן יותר / עמיד יותר, וקצב ההתרבות שלו גדול משל זן א'." />
+      <MultipleChoiceQnA qNum="16" points={8} onScore={onScore} question="הסבירו כיצד הגנה על קרום התא בסביבה שיש בה אתנול מאפשרת לתאי השמרים לשמור על הומאוסטזיס." options={["הגנה על הקרום שומרת על בררנותו, מונעת חדירת רעלים ושומרת על סביבה יציבה.","על ידי הפיכת הקרום לאטום לחלוטין לכניסה של כל חומר חיצוני מהסביבה.","הקרום המוגן הופך למקור האנרגיה החלופי המועדף על השמרים בניסוי זה.","הגנה על הקרום מונעת פליטת פחמן דו-חמצני ובכך שומרת על רמת חומציות גבוהה."]} correctAnswerIndex={0} explanation="האתנול פוגע בקרום התא (בפוספוליפידים / בחלבונים). הגנה על קרום התא מאפשרת שמירה על בררנות הקרום ועל פעילות החלבונים. כך הסביבה הפנימית נשמרת שונה מהחיצונית ויש שמירה על מאזן מומסים (הומיאוסטזיס)." />
     </div>
   );
 };
 
+const ScoreSummary = ({ scores }) => {
+  const answeredCount = Object.keys(scores).length;
+  const totalQuestions = 16;
+  const totalEarned = Object.values(scores).reduce((sum, s) => sum + s.earned, 0);
+  const totalPossible = 100;
+  const progressPercent = (answeredCount / totalQuestions) * 100;
+
+  return (
+    <div className="bg-white border-2 border-stone-200 rounded-2xl shadow-md mt-12 text-center relative overflow-hidden flex flex-col items-center p-6 md:p-10">
+      <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-600"></div>
+
+      <h2 className="text-xl md:text-2xl font-bold text-emerald-900 mb-6">סיכום ציון המעבדה</h2>
+
+      <div className="text-6xl md:text-8xl font-extrabold text-stone-800 mb-2 leading-none">
+        {totalEarned}
+      </div>
+      <div className="text-sm md:text-base text-stone-500 mb-6 font-bold">
+        מתוך {totalPossible} נקודות
+      </div>
+
+      <div className="text-sm md:text-base font-bold text-stone-700 mb-4">
+        ענית על <span className="text-emerald-700">{answeredCount}</span> מתוך {totalQuestions} שאלות במעבדה.
+      </div>
+
+      {answeredCount < totalQuestions ? (
+        <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm md:text-base font-bold mb-6 w-full max-w-md">
+          כדי לראות את הציון הסופי והמדויק, אנא השלם/י את כל השאלות שנותרו.
+        </div>
+      ) : (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm md:text-base font-bold mb-6 w-full max-w-md">
+          {totalEarned >= 90 ? "כל הכבוד! ציון מצוין ומעיד על הבנה מעמיקה." :
+           totalEarned >= 70 ? "עבודה טובה! כדאי לעבור שוב על ההסברים בחלק מהשאלות." :
+           "כדאי לחזור על החומר, לעיין בהסברים ולנסות שוב."}
+        </div>
+      )}
+
+      <div className="w-full max-w-lg h-3 md:h-4 bg-stone-100 rounded-full overflow-hidden border border-stone-200">
+        <div
+          className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 transition-all duration-500"
+          style={{ width: `${progressPercent}%` }}
+        ></div>
+      </div>
+    </div>
+  );
+};
 
 export default function App() {
+  const [scores, setScores] = useState({});
+
+  const handleScore = (qNum, scoreEarned, maxScore) => {
+    setScores(prev => ({
+      ...prev,
+      [qNum]: { earned: scoreEarned, max: maxScore }
+    }));
+  };
+
+  const totalEarned = Object.values(scores).reduce((sum, s) => sum + s.earned, 0);
+
   return (
-    <div dir="rtl" className="rtl min-h-screen bg-stone-100 text-stone-900 font-sans p-2 sm:p-4 md:p-8">
+    <div dir="rtl" className="rtl min-h-screen bg-stone-100 text-stone-900 font-sans p-2 sm:p-4 md:p-8 relative">
       <style>{customStyles}</style>
+      
+      {/* Floating Score Widget */}
+      <div className="fixed bottom-6 left-0 z-[100] bg-white border-y-2 border-r-2 border-stone-200 border-b-4 border-b-emerald-500 rounded-r-2xl shadow-[4px_4px_15px_rgba(0,0,0,0.1)] p-3 md:p-4 flex flex-col items-center justify-center min-w-[90px] md:min-w-[110px] transition-all hover:scale-105">
+        <span className="text-[11px] md:text-xs text-stone-600 font-bold mb-1">ציון ביניים</span>
+        <span className="text-2xl md:text-4xl font-extrabold text-emerald-600 leading-none">{totalEarned}</span>
+      </div>
+
       <div className="max-w-5xl mx-auto bg-white rounded-2xl md:rounded-3xl shadow-xl overflow-hidden border border-emerald-100">
-        <header className="bg-gradient-to-r from-emerald-800 via-teal-700 to-emerald-900 text-white p-6 md:p-10 text-center shadow-lg relative overflow-hidden text-right">
+        <header className="bg-gradient-to-r from-emerald-800 via-teal-700 to-emerald-900 text-white p-6 md:p-10 text-center shadow-lg relative overflow-hidden text-right flex flex-col items-center justify-center">
           <h1 className="text-base sm:text-xl md:text-3xl lg:text-4xl font-extrabold mb-3 md:mb-4 drop-shadow-md relative z-10 whitespace-nowrap overflow-hidden text-ellipsis" style={{ fontFamily: "'Rubik', sans-serif" }}>מעבדה בביולוגיה: נשימה תאית בשמרים</h1>
           <div className="mt-2 md:mt-3 text-xs sm:text-sm md:text-[15px] bg-white/20 inline-block px-4 py-1.5 md:px-5 md:py-2 rounded-full font-bold backdrop-blur-md border border-white/40 shadow-sm relative z-10 tracking-wide text-right">בגרות בביולוגיה 2023- בעיה 5</div>
         </header>
         <main className="p-4 sm:p-6 md:p-12 text-right overflow-hidden">
-          <PartA />
-          <PartB />
-          <PartC />
+          <PartA onScore={handleScore} />
+          <PartB onScore={handleScore} />
+          <PartC onScore={handleScore} />
+          <ScoreSummary scores={scores} />
         </main>
-        <footer className="bg-gradient-to-r from-emerald-800 via-teal-700 to-emerald-900 text-white p-4 md:p-6 text-center text-xs md:text-[15px] shadow-inner mt-4 md:mt-8">
+        <footer className="bg-gradient-to-r from-emerald-800 via-teal-700 to-emerald-900 text-white p-4 md:p-6 text-center text-xs md:text-[15px] shadow-inner mt-4 md:mt-8 pb-24 md:pb-6">
           <p>כל הזכויות לתוכן הבחינה שמורות למשרד החינוך נערכת על ידי רבקה פרידלנד כהן</p>
         </footer>
       </div>
     </div>
   );
 }
-
-
-
